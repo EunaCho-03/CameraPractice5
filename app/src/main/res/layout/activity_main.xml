@@ -14,7 +14,7 @@
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
+        android:layout_marginLeft="60dp"
         android:layout_alignParentBottom="true"
         android:layout_marginBottom="40sp"
         android:id="@+id/record"
@@ -24,17 +24,16 @@
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="10sp"
-        app:tint="#fff"
+        android:layout_alignLeft="@id/record"
+        android:layout_marginLeft="200dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="40sp"
         android:id="@+id/picture"
-        android:background="?attr/selectableItemBackgroundBorderless"
         android:text="사진찍기"/>
 
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_below="@id/picture"
         android:layout_marginEnd="10sp"
         android:layout_alignParentEnd="true"
         android:id="@+id/flipCamera"
@@ -42,10 +41,21 @@
         app:tint="#fff"
         android:text="방향전환"/>
 
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignLeft="@id/record"
+        android:layout_marginLeft="100dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="40sp"
+        android:id="@+id/start"
+        android:text="시작"/>
+
+
     <ImageView
         android:id="@+id/imageView"
-        android:layout_width="200dp"
-        android:layout_height="200dp"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
         android:layout_marginTop="10dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.497"

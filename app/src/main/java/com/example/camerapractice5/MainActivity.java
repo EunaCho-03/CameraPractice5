@@ -4,35 +4,34 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.media.Image;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
-import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.Toast;
 import android.widget.ImageView;
-import android.net.Uri;
+import android.util.Log;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.AspectRatio;
-import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageCapture;
-//import androidx.camera.core.
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
-
 import androidx.camera.video.MediaStoreOutputOptions;
 import androidx.camera.video.Quality;
 import androidx.camera.video.QualitySelector;
@@ -47,7 +46,6 @@ import androidx.core.content.ContextCompat;
 import com.example.camerapractice5.R;
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
@@ -56,22 +54,28 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+
 public class MainActivity extends AppCompatActivity {
     ExecutorService service;
     Recording recording = null;
-    ImageCapture imageCapture = null;
     VideoCapture<Recorder> videoCapture = null;
-    ProcessCameraProvider processCameraProvider;
-
-    Button record, picture, flipCamera;
+    Button record, picture, flipCamera, start;
     PreviewView previewView;
     ImageView imageView;
+    ImageCapture imageCapture;
+    ProcessCameraProvider processCameraProvider;
     int cameraFacing = CameraSelector.LENS_FACING_BACK;
     private final ActivityResultLauncher<String> activityResultLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), result -> {
         if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera(cameraFacing);
         }
     });
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) { // 이 앱에서 카메라를 호출하고 그 결과를 다시 앱으로 가져옥ㄹ때
+        super.onActivityResult(requestCode, resultCode, data);
+        Log.e("TEST", "onActivityResult");
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,73 +85,40 @@ public class MainActivity extends AppCompatActivity {
         previewView = findViewById(R.id.viewFinder);
         record = findViewById(R.id.record);
         picture = findViewById(R.id.picture);
+        start = findViewById(R.id.start);
         flipCamera = findViewById(R.id.flipCamera);
         imageView = findViewById(R.id.imageView);
 
-        bindPreview();
-        bindImageCapture();
+        ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.CAMERA}, 1); // 권한 요청 코드 (1 = request code / single permission 하나)
 
-        picture.setOnClickListener(new View.OnClickListener() {
+
+        start.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    activityResultLauncher.launch(Manifest.permission.CAMERA);
-                }else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-                }else{
-                    captureImage();
+            public void onClick(View v) { // 사용자가 클릭한 위젯이 view 매개변수 들어감
+                //Log.e("TEST", "startButton onClick called");
+                if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) { // 권한을 부여받았다면
+                    //Log.e("TEST", "startButton onClick permission granted");
+//                    Log.e("TEST", "startButton onclick START, calling startCamera()...");
+                    Log.e("TEST", "startButton onclick startCamera finished, using processCameraProvider...");
+                    processCameraProvider.unbindAll(); // 수명주기에 있는 액티비티 모두 카메라X에서 해제
+                    bindPreview();
+                    bindImageCapture();
+                    bindVideoCapture();
                 }
-                imageCapture.takePicture(ContextCompat.getMainExecutor(MainActivity.this),
-                        new ImageCapture.OnImageCapturedCallback() {
-                            @Override
-                            public void onCaptureSuccess(@NonNull ImageProxy image) {
-
-                                @SuppressLint({"UnsafeExperimentalUsageError", "UnsafeOptInUsageError"})
-                                Image mediaImage = image.getImage();
-                                Bitmap[] bitmap = {ImageUtil.mediaImageToBitmap(mediaImage)};
-
-                                Log.d("MainActivity", Integer.toString(bitmap[0].getWidth())); //4128
-                                Log.d("MainActivity", Integer.toString(bitmap[0].getHeight())); //3096
-
-                                Bitmap rotatedBitmap = ImageUtil.rotateBitmap(bitmap[0], image.getImageInfo().getRotationDegrees());
-
-                                Log.d("MainActivity", Integer.toString(rotatedBitmap.getWidth())); //3096
-                                Log.d("MainActivity", Integer.toString(rotatedBitmap.getHeight())); //4128
-                                Log.d("MainAtivity", Integer.toString(image.getImageInfo().getRotationDegrees())); //90 //0, 90, 180, 90 //이미지를 바르게 하기위해 시계 방향으로 회전해야할 각도
-
-
-                                imageView.setImageBitmap(rotatedBitmap);
-
-                                super.onCaptureSuccess(image);
-                                //String filename = "photo.JPG";
-                                //saveFile(filename);
-                                captureImage();
-
-                            }
-                        }
-                );
             }
         });
 
-        if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            activityResultLauncher.launch(Manifest.permission.CAMERA);
-        } else {
-            startCamera(cameraFacing);
-        }
-
         record.setOnClickListener(view -> {
-            if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                activityResultLauncher.launch(Manifest.permission.CAMERA);
+            } else if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 activityResultLauncher.launch(Manifest.permission.RECORD_AUDIO);
+            } else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
             } else {
                 captureVideo();
             }
         });
-
-        if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            activityResultLauncher.launch(Manifest.permission.CAMERA);
-        } else {
-            startCamera(cameraFacing);
-        }
 
         flipCamera.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -157,14 +128,45 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     cameraFacing = CameraSelector.LENS_FACING_BACK;
                 }
-                startCamera(cameraFacing);
+                processCameraProvider.unbindAll(); // 아래 코드들로 변경된 방향으로 새로운 카메라 뷰 생성하기
+                bindPreview();
+                bindImageCapture();
             }
         });
 
-        service = Executors.newSingleThreadExecutor();
+        picture.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Log.e("TEST","picture Button Clicked");
+                imageCapture.takePicture(ContextCompat.getMainExecutor(MainActivity.this),
+                        new ImageCapture.OnImageCapturedCallback() {  // 이미지 캡쳐가 완료되면 콜백 (콜백:어떤 조건이 충족되면(이벤트가 발생하면) 이 코드 처리를 해라)
+                            @Override
+                            public void onCaptureSuccess(@NonNull ImageProxy image) { // close하는(끝내는) 콜백 (여기서 @NonNull ImageProxy image = 캡쳐된 이미지
+                                //Log.e("TEST", "takePicture onCaptureSuccess");
+                                @SuppressLint({"UnsafeExperimentalUsageError", "UnsafeOptInUsageError"})
+                                Image mediaImage = image.getImage();
+                                Bitmap[] bitmap = {ImageUtil.mediaImageToBitmap(mediaImage)};
+                                Bitmap rotatedBitmap = ImageUtil.rotateBitmap(bitmap[0], image.getImageInfo().getRotationDegrees());
+                                //Bitmap rotatedBitmap = ImageUtil.mediaImageToBitmap(mediaImage); 그냥 mediaImage를 이미지뷰에 넣으면 회전된 각도로 나옴
+                                imageView.setImageBitmap(rotatedBitmap); // 이미지뷰에 비트맵을 로드해서 출력한다
+                                saveImage();
+                                Log.e("TEST","saveImage called");
+                            }
+                        }
+                );
+
+            }
+        });
+
+        if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            activityResultLauncher.launch(Manifest.permission.CAMERA);
+        } else {
+            Log.e("TEST","call startCamera");
+            startCamera(cameraFacing);
+        }
     }
 
-    public void captureImage(){
+    public void saveImage(){
         Uri images;
         ContentResolver contentResolver = getContentResolver();
         images = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
@@ -184,26 +186,12 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(getApplicationContext(), "갤러리에 저장 성공", Toast.LENGTH_LONG).show();
 
         }catch(Exception e){
-            Toast.makeText(getApplicationContext(), "갤러리에 저장 실패", Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
-
-        //ImageCapture imageCapture1 = imageCapture;
-        /*
-        String name = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
-        contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/*");
-        contentValues.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Picture");
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
-        Toast.makeText(this, "사진 저장", Toast.LENGTH_SHORT).show();
-        */
-
     }
 
     public void captureVideo() {
+        //capture.setImageResource(R.drawable.round_stop_circle_24);
         Recording recording1 = recording;
         if (recording1 != null) {
             recording1.stop();
@@ -235,57 +223,41 @@ public class MainActivity extends AppCompatActivity {
                     String msg = "Error: " + ((VideoRecordEvent.Finalize) videoRecordEvent).getError();
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
                 }
+                //capture.setImageResource(R.drawable.round_fiber_manual_record_24);
             }
         });
     }
 
     public void startCamera(int cameraFacing) {
-        ListenableFuture<ProcessCameraProvider> processCameraProvider = ProcessCameraProvider.getInstance(MainActivity.this);
+        ListenableFuture<ProcessCameraProvider> future_processCameraProvider = ProcessCameraProvider.getInstance(MainActivity.this); //지금 액티비티의 ProcessCameraProvider을 회수함
 
-        processCameraProvider.addListener(() -> {
+        future_processCameraProvider.addListener(() -> {
             try {
-                ProcessCameraProvider cameraProvider = processCameraProvider.get();
-                Preview preview = new Preview.Builder().build();
-                preview.setSurfaceProvider(previewView.getSurfaceProvider());
-
-                Recorder recorder = new Recorder.Builder()
-                        .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
-                        .build();
-                videoCapture = VideoCapture.withOutput(recorder);
-
-                cameraProvider.unbindAll();
-
-                CameraSelector cameraSelector = new CameraSelector.Builder()
-                        .requireLensFacing(cameraFacing).build();
-
-                Camera camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, videoCapture);
-
-
+                processCameraProvider = future_processCameraProvider.get(); //카메라의 생명주기를 액티비티와 같은 생명주기에 결합시킴
+                Log.e("TEST", "startCamera future get complete");
+                processCameraProvider.unbindAll();
             } catch (ExecutionException | InterruptedException e) {
                 e.printStackTrace();
             }
         }, ContextCompat.getMainExecutor(MainActivity.this));
     }
 
-    public byte[] bitmapToByteArray(Bitmap $bitmap){
-        ByteArrayOutputStream stream = new ByteArrayOutputStream() ;
-        $bitmap.compress( Bitmap.CompressFormat.JPEG, 100, stream) ;
-        return stream.toByteArray()  ;
-    }
-
-
 
     void bindPreview() {
-        previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);
+        previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER); //이미지의 가로, 세로 중 긴 쪽을 ImageView의 레이아웃에 맞춰출력함 (이미지 비율은 유지)
+
         CameraSelector cameraSelector = new CameraSelector.Builder()
                 .requireLensFacing(cameraFacing)
                 .build();
+
+        //cameraSelector = CameraSelector.LENS_FACING_BACK;
         Preview preview = new Preview.Builder()
                 .setTargetAspectRatio(AspectRatio.RATIO_4_3) //디폴트 표준 비율
                 .build();
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
         processCameraProvider.bindToLifecycle(this, cameraSelector, preview);
+        //Log.e("TEST", "bindPreview SUCC");
     }
 
     void bindImageCapture() {
@@ -295,9 +267,22 @@ public class MainActivity extends AppCompatActivity {
         imageCapture = new ImageCapture.Builder()
                 .build();
 
-        processCameraProvider.bindToLifecycle(this, cameraSelector, imageCapture);
+        processCameraProvider.bindToLifecycle(this, cameraSelector, imageCapture); // 카메라 생명주기 연결
+        //Log.e("TEST", "bindImageCapture SUCC");
     }
 
+    void bindVideoCapture(){
+        CameraSelector cameraSelector = new CameraSelector.Builder()
+                .requireLensFacing(cameraFacing)
+                .build();
+        Recorder recorder = new Recorder.Builder()
+                .setQualitySelector(QualitySelector.from(Quality.HIGHEST)) // 새로운 퀄리티의 recorder 생성
+                .build();
+        videoCapture = VideoCapture.withOutput(recorder);
+
+        processCameraProvider.bindToLifecycle(this, cameraSelector, videoCapture);
+
+    }
 
     @Override
     protected void onDestroy() {
