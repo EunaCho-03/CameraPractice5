@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
     PreviewView previewView; // 카메라에 비치는 화면의 역할
     ImageView imageView; // 이미지를 화면에 띄우기 위해서
     ImageCapture imageCapture; // 사진을 캡쳐할 수 있도록 기본 컨트롤을 제공
-    ProcessCameraProvider processCameraProvider; // 기본적인 카메라 접근을 부여함(카메라가 핸드폰에 있는지, 카메라 정보등에 대해 물어봄)
+    ProcessCameraProvider processCameraProvider; // 수명주기와 연결하여 기본적인 카메라 접근을 부여함(카메라가 핸드폰에 있는지, 카메라 정보등)
     int cameraFacing = CameraSelector.LENS_FACING_BACK; // 디폴트: 카메라 후면
 
 /*
@@ -242,9 +242,10 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         }
 
         recording = videoCapture.getOutput().prepareRecording(MainActivity.this, options).withAudioEnabled().start(ContextCompat.getMainExecutor(MainActivity.this), new Consumer<VideoRecordEvent>() {
+            //recording에 캡쳐된 비디오 담기
             @Override
             public void accept(VideoRecordEvent videoRecordEvent) {
-                //recording 계속 실행
+                //recording 계속 실행 (accept 함수로 Finalize 될때까지 돌아감)
                 Log.e("TEST", "recording "+videoRecordEvent);
                 if (videoRecordEvent instanceof VideoRecordEvent.Start) { // 녹화 시작
                     record.setEnabled(true); // record 시작
