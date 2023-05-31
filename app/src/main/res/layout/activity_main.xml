@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+LinearLayout: 객체를 만들면 겹치지 않고 수평/수직으로 나열됨
+FrameLayout: 객체가 왼쪽 위에서 모두 겹침
+RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
+-->
+
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -40,6 +47,17 @@
         android:background="?attr/selectableItemBackgroundBorderless"
         app:tint="#fff"
         android:text="방향전환"/>
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignLeft="@id/flipCamera"
+        android:layout_marginTop="40dp"
+        android:layout_alignParentRight="true"
+        android:id="@+id/stop"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:tint="#fff"
+        android:text="멈춤"/>
 
     <Button
         android:layout_width="wrap_content"
