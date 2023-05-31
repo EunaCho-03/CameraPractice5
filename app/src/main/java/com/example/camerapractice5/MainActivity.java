@@ -224,7 +224,6 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             Log.e("TEST","recording1 not null");
             recording1.stop(); // 멈추고
             recording = null; // recording값에 다시 null
-            return;
         }
 
         String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
