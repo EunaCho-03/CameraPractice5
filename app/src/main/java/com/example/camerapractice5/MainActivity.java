@@ -4,9 +4,12 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.PointF;
 import android.graphics.drawable.BitmapDrawable;
 import android.media.Image;
 import android.media.MediaActionSound;
@@ -15,9 +18,17 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.DisplayMetrics;
+import android.util.Rational;
+import android.util.Size;
+import android.view.MotionEvent;
+import android.view.View.OnTouchListener;
+import android.view.Surface;
+import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ImageView;
 import android.util.Log;
@@ -26,12 +37,19 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
+import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.FocusMeteringResult;
+import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageProxy;
+import androidx.camera.core.MeteringPoint;
+import androidx.camera.core.MeteringPointFactory;
+import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.video.MediaStoreOutputOptions;
@@ -42,6 +60,7 @@ import androidx.camera.video.Recording;
 import androidx.camera.video.VideoCapture;
 import androidx.camera.video.VideoRecordEvent;
 import androidx.camera.view.PreviewView;
+import androidx.constraintlayout.widget.ConstraintSet;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Consumer;
@@ -57,14 +76,22 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import android.os.SystemClock;
+import android.widget.Chronometer;
+
 public class MainActivity extends AppCompatActivity { // 하위버전 단말기에 실행 안되는 메소드를 지원하기 위해 AppCompatActivity를 extend함
     //버튼이나 필요한 API들 선언하기
     Recording recording = null; // 실제 녹화를 실행함
+    Chronometer chronometer;
+    boolean running = false;
     MediaActionSound sound = new MediaActionSound(); // 여러 소리를 냄
     VideoCapture<Recorder> videoCapture = null; //카메라가 비디오프레임을 구성하게함
-    Button record, picture, flipCamera, start, stop; // 만든 버튼들
+    Button record, picture, flipCamera; // 만든 버튼들
+    TextView timerText;
     PreviewView previewView; // 카메라에 비치는 화면의 역할
     ImageView imageView; // 이미지를 화면에 띄우기 위해서
+
+    Camera camera;
     ImageCapture imageCapture; // 사진을 캡쳐할 수 있도록 기본 컨트롤을 제공
     ProcessCameraProvider processCameraProvider; // 수명주기와 연결하여 기본적인 카메라 접근을 부여함(카메라가 핸드폰에 있는지, 카메라 정보등)
     int cameraFacing = CameraSelector.LENS_FACING_BACK; // 디폴트: 카메라 후면
@@ -77,34 +104,76 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         previewView = findViewById(R.id.viewFinder); // findViewById = activity_main.xml에서 설정된 뷰를 가져오는 메소드
         record = findViewById(R.id.record);
         picture = findViewById(R.id.picture);
-        start = findViewById(R.id.start);
-        stop = findViewById(R.id.stop);
         flipCamera = findViewById(R.id.flipCamera);
         imageView = findViewById(R.id.imageView);
+        chronometer = findViewById(R.id.chronometer);
+        chronometer.setFormat("%s");
+        chronometer.setBackgroundColor(Color.RED);
+
+        try {
+            processCameraProvider = ProcessCameraProvider.getInstance(this).get();
+            // 전에 썼던 코드:
+            /* processCameraProvider에 인스턴스 바로 넣기
+            public void startCamera(int cameraFacing) {
+        ListenableFuture<ProcessCameraProvider> future_processCameraProvider = ProcessCameraProvider.getInstance(MainActivity.this); //지금 액티비티의 ProcessCameraProvider을 회수함
+
+        future_processCameraProvider.addListener(() -> { //startCamera 이벤트가 발생하면 리스너에게 이벤트를 알려주고 아래 기능을 구현한다. 지금 버튼에 호출함수가 아니기 때문에 AddListener로 연결시켜주는거임
+            try {
+                processCameraProvider = future_processCameraProvider.get(); //카메라의 생명주기를 액티비티와 같은 생명주기에 결합시킴
+            } catch (ExecutionException | InterruptedException e) { // 이런 예외들이 발생한다면
+                e.printStackTrace(); // 애러 메세지의 발생 근원지를 찾아서 단계별로 에러를 출력해라
+            }
+        }, ContextCompat.getMainExecutor(MainActivity.this)); // 카메라는 메인스레드에서 실행을 하기 때문에 MainExecutor에서 받아옴
+    }
+             */
+        }
+        catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+        catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 
         if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) { // 권한 체크
             activityResultLauncher.launch(Manifest.permission.CAMERA);
         //} else if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
         //    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         }else {
-            startCamera(cameraFacing); // 권한 부여받았다면 카메라 시작 함수 호출
+            bind(); // 권한 부여 받았다면 카메라 연결
+            //startCamera(cameraFacing); // 권한 부여받았다면 카메라 시작 함수 호출
             // 여기에 써야하는 이유는 startCamera에서 processCameraProvider를 정의하고 나중에 시작 버튼 클릭되어 바인딩할때 processCamera가 필요하기 때문
+            //바로 위에 써도 안됨. 만들어지는데 시간이 걸리기 때문
         }
 
-        start.setOnClickListener(new View.OnClickListener() {
+        /*
+        previewView.setOnTouchListener(new View.OnTouchListener() {
             @Override
-            public void onClick(View v) { // 사용자가 클릭한 위젯이 view 매개변수 들어감
-                if (ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) { // 권한을 부여받았다면
-                    processCameraProvider.unbindAll(); // 수명주기에 있는 액티비티 모두 카메라X에서 해제시킴. 이미 카메라가 작동되고 있을때 다시 시작 버튼을 누르며ㅕㄴ 앱이 종료되는걸 방지
-                    bind(); // 다시 카메라와 연결
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_UP) {
+                    float x = event.getX();
+                    float y = event.getY();
+                    triggerFocusMetering(x, y);
                 }
+                return true;
             }
         });
-
-        stop.setOnClickListener(new View.OnClickListener() {
+         */
+        previewView.setOnTouchListener(new View.OnTouchListener() {
             @Override
-            public void onClick(View v) {
-                processCameraProvider.unbindAll(); // 뷰와 카메라 결합 해제
+            public boolean onTouch(View view, MotionEvent motionEvent) { // onTouch는 boolean이여야함
+                switch (motionEvent.getAction()) {
+                    case MotionEvent.ACTION_DOWN: // 손가락으로 눌렀을때
+                        return true;
+                    case MotionEvent.ACTION_UP: // 눌렀다 땠을때
+                        MeteringPointFactory factory = previewView.getMeteringPointFactory(); // MeteringPoint를 만듣는 곳
+                        MeteringPoint point = factory.createPoint(motionEvent.getX(), motionEvent.getY()); // MeterinPoint: 카메라의 지점. 그 지점을 x,y 좌표로 나타냄
+                        FocusMeteringAction action = new FocusMeteringAction.Builder(point).build(); // 찍은 좌표에 포커스 맞추기
+                        CameraControl cameraControl = camera.getCameraControl(); // CameraControl 기능: 확대/축소, 초점, 노출 보정
+                        cameraControl.startFocusAndMetering(action);
+                        return true;
+                    default:
+                        return false;
+                }
             }
         });
 
@@ -134,8 +203,10 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                                 public void onCaptureSuccess(@NonNull ImageProxy image) { // close하는(끝내는) 콜백 (여기서 @NonNull ImageProxy image = 캡쳐된 이미지
                                     @SuppressLint({"UnsafeExperimentalUsageError", "UnsafeOptInUsageError"}) // UnsafeExperimentalUsageError와 UnsafeOptInUsageError 검사 항목을 건너 뛰어라
                                     Image mediaImage = image.getImage(); // mediaImage = 캡쳐된 이미지
-                                    Bitmap[] bitmap = {ImageUtil.mediaImageToBitmap(mediaImage)}; //만들어둔 ImageUtil의 이미지를 비트맵으로 변환시키는 메소드를 씀
-                                    Bitmap rotatedBitmap = ImageUtil.rotateBitmap(bitmap[0], image.getImageInfo().getRotationDegrees()); //그냥 mediaImage를 이미지뷰에 넣으면 회전된 각도로 나옴
+                                    Bitmap bitmap = ImageUtil.mediaImageToBitmap(mediaImage); //만들어둔 ImageUtil의 이미지를 비트맵으로 변환시키는 메소드를 씀
+                                    float rotationDegrees = image.getImageInfo().getRotationDegrees(); // 회전시켜야할 각도
+                                    Bitmap rotatedBitmap = ImageUtil.rotateBitmap(bitmap, rotationDegrees); // 그 각도만큼 회전시킴
+                                    //Bitmap rotatedBitmap = ImageUtil.rotateBitmap(bitmap[0], image.getImageInfo().getRotationDegrees()); //그냥 mediaImage를 이미지뷰에 넣으면 회전된 각도로 나옴
                                     imageView.setImageBitmap(rotatedBitmap); // 이미지뷰에 비트맵을 로드해서 출력한다
                                     saveImage(rotatedBitmap); // 저장하는 함수 호출
                                 }
@@ -158,6 +229,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                 captureVideo(); // 모든 권한이 있다면 녹화하는 함수 호출
             }
         });
+
     }
 
     private final ActivityResultLauncher<String> activityResultLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), result -> {
@@ -168,21 +240,43 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         if (result) { // result(boolean) = ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
             //MainActivity.this = 앱의 현재 상태 또는 흘러가는 맥락 / Manifst.permission.CAMERA = 필요한 권한 명칭
             //권한을 이미 부여 받았다면 요청을 다시 하지 않는다 호출 결과: PERMISSION_GRANTED(권한 있음) 또는 PERMISSION_DENITED (권한 없음)
-            startCamera(cameraFacing);
+            //startCamera(cameraFacing);
+            bind();
         }
     });
+/*
+    private void triggerFocusMetering(float x, float y) {
+        if (camera != null) {
+            CameraControl cameraControl = camera.getCameraControl();
+            DisplayMetrics metrics = new DisplayMetrics();
+            previewView.getDisplay().getRealMetrics(metrics);
 
-    public void startCamera(int cameraFacing) {
-        ListenableFuture<ProcessCameraProvider> future_processCameraProvider = ProcessCameraProvider.getInstance(MainActivity.this); //지금 액티비티의 ProcessCameraProvider을 회수함
+            float sensorX = x / previewView.getWidth();
+            float sensorY = y / previewView.getHeight();
 
-        future_processCameraProvider.addListener(() -> { //startCamera 이벤트가 발생하면 리스너에게 이벤트를 알려주고 아래 기능을 구현한다. 지금 버튼에 호출함수가 아니기 때문에 AddListener로 연결시켜주는거임
-            try {
-                processCameraProvider = future_processCameraProvider.get(); //카메라의 생명주기를 액티비티와 같은 생명주기에 결합시킴
-            } catch (ExecutionException | InterruptedException e) { // 이런 예외들이 발생한다면
-                e.printStackTrace(); // 애러 메세지의 발생 근원지를 찾아서 단계별로 에러를 출력해라
+            int rotation = previewView.getDisplay().getRotation();
+            if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+                float tmp = sensorX;
+                sensorX = sensorY;
+                sensorY = tmp;
             }
-        }, ContextCompat.getMainExecutor(MainActivity.this)); // 카메라는 메인스레드에서 실행을 하기 때문에 MainExecutor에서 받아옴
+
+            Rational rational = new Rational(metrics.widthPixels, metrics.heightPixels);
+            Size screenSize = new Size(metrics.widthPixels, metrics.heightPixels);
+            Rational sensorAspectRatio = new Rational(previewView.getWidth(), previewView.getHeight());
+
+            MeteringPointFactory factory = previewView.getMeteringPointFactory();
+            MeteringPoint point = factory.createPoint(sensorX, sensorY, 1.0f);
+
+            FocusMeteringAction action = new FocusMeteringAction.Builder(
+                    point, FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE)
+                    .build();
+
+            cameraControl.startFocusAndMetering(action);
+        }
     }
+*/
+
 
     public void saveImage(Bitmap rotatedBitmap){
         Uri images; // Uri = 리소스(외부 앱, 이미지, 택스트 등)에 접근할 수 있는 식별자 역할 (주소)
@@ -207,11 +301,10 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         }
     }
 
-
-
     public void captureVideo() {
         Log.e("TEST","Capture Video Button Clicked");
-        Recording recording1 = recording; // reocrding1이라는 변수에 recording값을 넣음
+        Recording recording1 = recording; // recording1이라는 변수에 recording값을 넣음
+
 
         //녹화 버튼을 두번째 눌렀다는것은 녹화를 멈추고 저장하고싶다는 뜻이니
         if (recording1 != null) { // 만약 지금 실행되고있는 녹화가 있다면
@@ -239,15 +332,25 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             //recording에 캡쳐된 비디오 담기
             @Override
             public void accept(VideoRecordEvent videoRecordEvent) {
+                Log.e("TEST","video accepted " + videoRecordEvent);
                 //recording 계속 실행 (accept 함수로 인해 Finalize 될때까지 돌아감)
-                Log.e("TEST", "recording "+videoRecordEvent);
                 if (videoRecordEvent instanceof VideoRecordEvent.Start) { // 녹화 시작
                     record.setEnabled(true); // record 시작
                     sound.play(MediaActionSound.START_VIDEO_RECORDING);
-                    Log.e("TEST", "On progress");
+                    if(!running){ // 디폴트: false
+                        chronometer.setBase(SystemClock.elapsedRealtime()); // 현재시간과 마지막으로 클릭된 시간 차이 (한번 눌렀으니 0)
+                        chronometer.start(); // 타이머 시작
+                        running = true;
+                        Log.e("TEST","Chronometer started");
+                    }
                 } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) { // 녹화 끝나서
                     if (!((VideoRecordEvent.Finalize) videoRecordEvent).hasError()) { // 에러가 없다면
+                        recording.close();
                         sound.play(MediaActionSound.STOP_VIDEO_RECORDING);
+                        chronometer.setBase(SystemClock.elapsedRealtime());
+                        chronometer.stop();
+                        Log.e("TEST","Chronometer stopped");
+                        running = false;
                         String msg = "녹화 완료: " + ((VideoRecordEvent.Finalize) videoRecordEvent).getOutputResults().getOutputUri(); // 메세지: 녹화분 정보
                         Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show(); // 메세지와 함께 토스트 띄우기
                     } else {
@@ -260,7 +363,6 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             }
         });
     }
-
 
     void bind(){
         previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER); //이미지의 가로, 세로 중 긴 쪽을 ImageView의 레이아웃에 맞춰출력함 (이미지 비율은 유지)

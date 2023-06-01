@@ -48,26 +48,15 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         app:tint="#fff"
         android:text="방향전환"/>
 
-    <Button
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignLeft="@id/flipCamera"
-        android:layout_marginTop="40dp"
-        android:layout_alignParentRight="true"
-        android:id="@+id/stop"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        app:tint="#fff"
-        android:text="멈춤"/>
-
-    <Button
+    <Chronometer
+        android:id="@+id/chronometer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignLeft="@id/record"
-        android:layout_marginLeft="100dp"
+        android:layout_marginLeft="110dp"
         android:layout_alignParentBottom="true"
-        android:layout_marginBottom="40sp"
-        android:id="@+id/start"
-        android:text="시작"/>
+        android:layout_marginBottom="50sp"
+        android:textSize="20sp"/>
 
 
     <ImageView
