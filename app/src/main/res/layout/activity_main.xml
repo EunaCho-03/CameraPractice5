@@ -69,5 +69,12 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         app:layout_constraintStart_toStartOf="parent"
         tools:srcCompat="@tools:sample/avatars" />
 
+    <ImageView
+        android:id="@+id/focusSquare"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/focus_rectangle"
+        android:layout_centerInParent="true"/>
+
 </RelativeLayout>
 

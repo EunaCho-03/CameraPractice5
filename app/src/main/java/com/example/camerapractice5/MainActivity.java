@@ -17,6 +17,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.provider.MediaStore;
 import android.util.DisplayMetrics;
 import android.util.Rational;
@@ -87,11 +88,13 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
     MediaActionSound sound = new MediaActionSound(); // 여러 소리를 냄
     VideoCapture<Recorder> videoCapture = null; //카메라가 비디오프레임을 구성하게함
     Button record, picture, flipCamera; // 만든 버튼들
-    TextView timerText;
     PreviewView previewView; // 카메라에 비치는 화면의 역할
     ImageView imageView; // 이미지를 화면에 띄우기 위해서
-
+    ImageView focusSquare;
     Camera camera;
+
+    //Handler handler = null;
+
     ImageCapture imageCapture; // 사진을 캡쳐할 수 있도록 기본 컨트롤을 제공
     ProcessCameraProvider processCameraProvider; // 수명주기와 연결하여 기본적인 카메라 접근을 부여함(카메라가 핸드폰에 있는지, 카메라 정보등)
     int cameraFacing = CameraSelector.LENS_FACING_BACK; // 디폴트: 카메라 후면
@@ -106,9 +109,12 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         picture = findViewById(R.id.picture);
         flipCamera = findViewById(R.id.flipCamera);
         imageView = findViewById(R.id.imageView);
+        focusSquare=findViewById(R.id.focusSquare);
+        focusSquare.setVisibility(View.INVISIBLE);
         chronometer = findViewById(R.id.chronometer);
         chronometer.setFormat("%s");
         chronometer.setBackgroundColor(Color.RED);
+        chronometer.setVisibility(View.INVISIBLE);
 
         try {
             processCameraProvider = ProcessCameraProvider.getInstance(this).get();
@@ -136,8 +142,8 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
 
         if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) { // 권한 체크
             activityResultLauncher.launch(Manifest.permission.CAMERA);
-        //} else if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
-        //    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            //} else if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
+            //    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         }else {
             bind(); // 권한 부여 받았다면 카메라 연결
             //startCamera(cameraFacing); // 권한 부여받았다면 카메라 시작 함수 호출
@@ -158,6 +164,8 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             }
         });
          */
+
+
         previewView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) { // onTouch는 boolean이여야함
@@ -168,8 +176,18 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                         MeteringPointFactory factory = previewView.getMeteringPointFactory(); // MeteringPoint를 만듣는 곳
                         MeteringPoint point = factory.createPoint(motionEvent.getX(), motionEvent.getY()); // MeterinPoint: 카메라의 지점. 그 지점을 x,y 좌표로 나타냄
                         FocusMeteringAction action = new FocusMeteringAction.Builder(point).build(); // 찍은 좌표에 포커스 맞추기
+                        //camera.getCameraControl().startFocusAndMetering(action);
                         CameraControl cameraControl = camera.getCameraControl(); // CameraControl 기능: 확대/축소, 초점, 노출 보정
                         cameraControl.startFocusAndMetering(action);
+                        focusSquare.setX(motionEvent.getX());
+                        focusSquare.setY(motionEvent.getY());
+                        focusSquare.setVisibility(View.VISIBLE);
+                        new Handler().postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                focusSquare.setVisibility(View.INVISIBLE);
+                            }
+                        }, 500);
                         return true;
                     default:
                         return false;
@@ -223,8 +241,8 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                 activityResultLauncher.launch(Manifest.permission.CAMERA); // 권한을 부여 받지 못했다면 다시 요청
             } else if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 activityResultLauncher.launch(Manifest.permission.RECORD_AUDIO);
-            //} else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            //    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                //} else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                //    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
             } else {
                 captureVideo(); // 모든 권한이 있다면 녹화하는 함수 호출
             }
@@ -305,12 +323,12 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         Log.e("TEST","Capture Video Button Clicked");
         Recording recording1 = recording; // recording1이라는 변수에 recording값을 넣음
 
-
         //녹화 버튼을 두번째 눌렀다는것은 녹화를 멈추고 저장하고싶다는 뜻이니
         if (recording1 != null) { // 만약 지금 실행되고있는 녹화가 있다면
             Log.e("TEST","recording1 not null");
             recording1.stop(); // 멈추고
             recording = null; // recording값에 다시 null
+            return;
         }
 
         String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
@@ -328,27 +346,33 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             return; // 오디오 권한을 부여받지 못했다면 돌아가기
         }
 
+
         recording = videoCapture.getOutput().prepareRecording(MainActivity.this, options).withAudioEnabled().start(ContextCompat.getMainExecutor(MainActivity.this), new Consumer<VideoRecordEvent>() {
             //recording에 캡쳐된 비디오 담기
+
             @Override
             public void accept(VideoRecordEvent videoRecordEvent) {
                 Log.e("TEST","video accepted " + videoRecordEvent);
                 //recording 계속 실행 (accept 함수로 인해 Finalize 될때까지 돌아감)
                 if (videoRecordEvent instanceof VideoRecordEvent.Start) { // 녹화 시작
                     record.setEnabled(true); // record 시작
+                    Log.e("TEST","On Progress");
                     sound.play(MediaActionSound.START_VIDEO_RECORDING);
+
                     if(!running){ // 디폴트: false
+                        chronometer.setVisibility(View.VISIBLE);
                         chronometer.setBase(SystemClock.elapsedRealtime()); // 현재시간과 마지막으로 클릭된 시간 차이 (한번 눌렀으니 0)
                         chronometer.start(); // 타이머 시작
                         running = true;
                         Log.e("TEST","Chronometer started");
                     }
+
                 } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) { // 녹화 끝나서
                     if (!((VideoRecordEvent.Finalize) videoRecordEvent).hasError()) { // 에러가 없다면
-                        recording.close();
                         sound.play(MediaActionSound.STOP_VIDEO_RECORDING);
                         chronometer.setBase(SystemClock.elapsedRealtime());
                         chronometer.stop();
+                        chronometer.setVisibility(View.INVISIBLE);
                         Log.e("TEST","Chronometer stopped");
                         running = false;
                         String msg = "녹화 완료: " + ((VideoRecordEvent.Finalize) videoRecordEvent).getOutputResults().getOutputUri(); // 메세지: 녹화분 정보
@@ -363,6 +387,10 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             }
         });
     }
+
+
+
+
 
     void bind(){
         previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER); //이미지의 가로, 세로 중 긴 쪽을 ImageView의 레이아웃에 맞춰출력함 (이미지 비율은 유지)
@@ -382,7 +410,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         //recorder = 화면에 띄워지는 비디오를 저장하는 역할
 
         // 선택한 카메라와 사용사례를 카메라 수명주기(카메라를 여는 시점, 캡쳐 세션을 생성할 시점, 중지 및 종료 시점) 연결. 수명주기전환에 맞춰 카메라 상태가 적절히 변경될 수 있음
-        processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture);
+        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture);
     }
 
     @Override
