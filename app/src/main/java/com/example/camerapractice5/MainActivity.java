@@ -19,6 +19,7 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
@@ -87,7 +88,8 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
     String getCameraID;
 
     SeekBar zoombar;
-
+    ScaleGestureDetector mScaleGestureDetector;
+    private float mScaleFactor = 1.0f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,11 +98,8 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
 
         previewView = findViewById(R.id.previewView);
         record = findViewById(R.id.record);
-        //record.setVisibility(View.INVISIBLE);
         picture = findViewById(R.id.picture);
-        //picture.setVisibility(View.INVISIBLE);
         flipCamera = findViewById(R.id.flipCamera);
-        //flipCamera.setVisibility(View.INVISIBLE);
         imageView = findViewById(R.id.imageView);
         focusSquare=findViewById(R.id.focusSquare); focusSquare.setVisibility(View.INVISIBLE);
         chronometer = findViewById(R.id.chronometer);
@@ -108,9 +107,8 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         chronometer.setBackgroundColor(Color.RED);
         chronometer.setVisibility(View.INVISIBLE);
         zoombar=findViewById(R.id.zoombar);
-        //zoombar.setBackgroundColor(Color.YELLOW);
         flash=findViewById(R.id.flash);
-
+        mScaleGestureDetector = new ScaleGestureDetector(this, new ScaleListener());
 
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         try {
@@ -128,9 +126,9 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 camera.getCameraControl().setLinearZoom((float) zoombar.getProgress()/seekBar.getMax());
-                Log.e("TEST","seekBar_Max = " + seekBar.getMax());
-                Log.e("TEST","progress = " + zoombar.getProgress());
-                Log.e("TEST","Zoom_Ratio = " + zoombar.getProgress() / seekBar.getMax());
+                //Log.e("TEST","seekBar_Max = " + seekBar.getMax());
+                //Log.e("TEST","progress = " + zoombar.getProgress());
+                //Log.e("TEST","Zoom_Ratio = " + zoombar.getProgress() / seekBar.getMax());
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
@@ -163,6 +161,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
 
+                mScaleGestureDetector.onTouchEvent(motionEvent);
                 switch (motionEvent.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         return true;
@@ -182,6 +181,16 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                             }
                         }, 500);
                         return true;
+                    case MotionEvent.ACTION_MOVE:
+                        if(motionEvent.getPointerCount() == 2){
+                            /*
+                            double now_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1)); // 두 손가락 X좌표 차이 절대값
+                            double now_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1)); // 두 손가락 Y좌표 차이 절대값
+                            if(touch_interval_X < now_interval_X && touch_interval_Y < now_interval_Y) { // 이전 값과 비교
+                             }
+                            mScaleGestureDetector.onTouchEvent(motionEvent);
+                             */
+                        }
                     default:
                         return false;
                 }
@@ -272,6 +281,21 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         }
     });
 
+    private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
+        @Override
+        public boolean onScale(ScaleGestureDetector scaleGestureDetector){
+            // ScaleGestureDetector에서 factor를 받아 변수로 선언한 factor에 넣고
+            mScaleFactor *= scaleGestureDetector.getScaleFactor();
+
+            // 최대 10배, 최소 10배 줌 한계 설정
+            mScaleFactor = Math.max(0.1f, Math.min(mScaleFactor, 10.0f));
+
+            // 프리뷰 스케일에 적용
+            previewView.setScaleX(mScaleFactor);
+            previewView.setScaleY(mScaleFactor);
+            return true;
+        }
+    }
 
     public void saveImage(Bitmap rotatedBitmap){
         Uri images;
