@@ -92,6 +92,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
     double first_Y = 0;
     double second_X = 0;
     double second_Y = 0;
+    float initial_ratio;
 
 
     @Override
@@ -190,7 +191,13 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
 
                     case MotionEvent.ACTION_POINTER_DOWN:
 
+                        initial_ratio = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getZoomRatio();
+
                         initial_zoom = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getLinearZoom();
+                        //Log.e("TEST","Liear Zoom = " + camera.getCameraInfo().getZoomState().getValue().getLinearZoom());
+                        //Log.e("TEST","Max Zoom = " + camera.getCameraInfo().getZoomState().getValue().getMaxZoomRatio());
+                        //Log.e("TEST","Min Zoom = " + camera.getCameraInfo().getZoomState().getValue().getMinZoomRatio());
+                        //Log.e("TEST","Zoom ratio = " + camera.getCameraInfo().getZoomState().getValue().getZoomRatio());
 
                         /*
                         second_X = motionEvent.getX();
@@ -204,7 +211,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                         //Log.e("TEST","X 좌표 2 = " + motionEvent.getX(1));
                         double touch_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1));
                         initial_distance = Math.sqrt(Math.pow(touch_interval_X, 2) + Math.pow(touch_interval_Y, 2));
-                        Log.e("TEST","Touch Distance = " + initial_distance);
+                       //Log.e("TEST","Touch Distance = " + initial_distance);
 
                         return true;
 
@@ -262,9 +269,12 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                                 float zoom_delta = (float) (now_distance / initial_distance); // 현재 줌인/줌아웃을 하기 위해 당긴 거리와 처음 화면에 댔을때 거리의 차이
                                 float zoom_delta_trasposed = zoom_delta - 1.f; // 예) 줌아웃: 0.8 , 줌인: 1.2라면 같은 비율로 밀거나 당겨지기 위해 1을 빼 -0.2, 0.2를 만듬
                                 final float zoom_ratio = 0.25f; // 너무 빨리 움직이므로 속도를 줄이기 위해
-                                camera.getCameraControl().setLinearZoom(initial_zoom + (zoom_delta_trasposed * zoom_ratio)); // 원래 카메라의 줌값에 1을뺀 값(줌 비율)을 0.25만큼 곱한 값을 더함
+                                //camera.getCameraControl().setLinearZoom(initial_zoom + (zoom_delta_trasposed * zoom_ratio)); // 원래 카메라의 줌값에 1을뺀 값(줌 비율)을 0.25만큼 곱한 값을 더함
                                 //줌아웃이 될때는 느려지는데 고치는법?
-                                Log.e("TEST","Current zoom = " + (initial_zoom + (zoom_delta_trasposed * zoom_ratio)));
+                                //Log.e("TEST","Current zoom = " + (initial_zoom + (zoom_delta_trasposed * zoom_ratio)));
+
+                                camera.getCameraControl().setZoomRatio(initial_ratio*zoom_delta); // 원래 확대 비율 * 거리 비율
+                                Log.e("TEST","Current zoom = " + zoom_delta);
 
 //                              camera.getCameraControl().setLinearZoom((float) (initial_zoom * zoom_delta));
 
