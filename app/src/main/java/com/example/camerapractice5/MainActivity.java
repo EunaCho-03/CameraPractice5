@@ -13,7 +13,6 @@ import android.hardware.camera2.CameraManager;
 import android.media.Image;
 import android.media.MediaActionSound;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
@@ -27,10 +26,7 @@ import android.widget.ImageView;
 import android.widget.Chronometer;
 import android.widget.SeekBar;
 import android.util.Log;
-import android.widget.ToggleButton;
-import androidx.annotation.RequiresApi;
 
-import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -44,7 +40,6 @@ import androidx.camera.core.ImageProxy;
 import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.MeteringPointFactory;
 import androidx.camera.core.Preview;
-import androidx.camera.core.ZoomState;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.video.MediaStoreOutputOptions;
 import androidx.camera.video.Quality;
@@ -63,10 +58,6 @@ import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
-
-import android.content.Context;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 
 public class MainActivity extends AppCompatActivity { // 하위버전 단말기에 실행 안되는 메소드를 지원하기 위해 AppCompatActivity를 extend함
     //버튼이나 필요한 API들 k선언하기
@@ -89,7 +80,19 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
 
     SeekBar zoombar;
     ScaleGestureDetector mScaleGestureDetector;
-    private float mScaleFactor = 1.0f;
+    //private float mScaleFactor = 1.0f;
+
+    //double first_interval_X = 0; // X 터치 간격
+
+    //double first_interval_Y = 0; // Y 터치 간격
+    double first_distance = 0;
+    double initial_distance = 0;
+    float initial_zoom = -1.0f;
+    double first_X = 0;
+    double first_Y = 0;
+    double second_X = 0;
+    double second_Y = 0;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,6 +113,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         flash=findViewById(R.id.flash);
         mScaleGestureDetector = new ScaleGestureDetector(this, new ScaleListener());
 
+
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         try {
             getCameraID = cameraManager.getCameraIdList()[0];
@@ -122,21 +126,18 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         }
 */
         zoombar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 camera.getCameraControl().setLinearZoom((float) zoombar.getProgress()/seekBar.getMax());
                 //Log.e("TEST","seekBar_Max = " + seekBar.getMax());
                 //Log.e("TEST","progress = " + zoombar.getProgress());
-                //Log.e("TEST","Zoom_Ratio = " + zoombar.getProgress() / seekBar.getMax());
+                //Log.e("TEST","Zoom_Ratio = " + (float) zoombar.getProgress() / seekBar.getMax());
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-
             }
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-
             }
         });
 
@@ -157,14 +158,56 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             bind();
         }
 
+
         previewView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
 
-                mScaleGestureDetector.onTouchEvent(motionEvent);
-                switch (motionEvent.getAction()) {
+                //mScaleGestureDetector.onTouchEvent(motionEvent);
+                switch (motionEvent.getAction() & MotionEvent.ACTION_MASK) {
+
                     case MotionEvent.ACTION_DOWN:
+                        /*
+                        first_X = motionEvent.getX();
+                        first_Y = motionEvent.getY();
+                        Log.e("TEST", "First X = " + first_X);
+                        Log.e("TEST","First Y = " + first_Y);
+
+                         */
+/*
+                        try {
+                            double first_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1)); // 두 손가락 X좌표 차이 절대값
+                            double first_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1)); // 두 손가락 Y좌표 차이 절대값
+                            double first_distance = Math.sqrt(Math.pow(first_interval_X, 2) + Math.pow(first_interval_Y, 2));
+                            Log.e("TEST","ACTION_DOWN pass");
+                            return true;
+                        } catch (IllegalArgumentException e) {
+                            e.printStackTrace();
+                            Log.e("TEST", "Exception" + e.getMessage());
+                        }
+*/
                         return true;
+
+                    case MotionEvent.ACTION_POINTER_DOWN:
+
+                        initial_zoom = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getLinearZoom();
+
+                        /*
+                        second_X = motionEvent.getX();
+                        second_Y = motionEvent.getY();
+                        Log.e("TEST", "Second X = " + second_X);
+                        Log.e("TEST", "Second Y = " + second_Y);
+
+                         */
+                        double touch_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1));
+                        //Log.e("TEST","X 좌표 1 = " + motionEvent.getX(0));
+                        //Log.e("TEST","X 좌표 2 = " + motionEvent.getX(1));
+                        double touch_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1));
+                        initial_distance = Math.sqrt(Math.pow(touch_interval_X, 2) + Math.pow(touch_interval_Y, 2));
+                        Log.e("TEST","Touch Distance = " + initial_distance);
+
+                        return true;
+
                     case MotionEvent.ACTION_UP:
                         MeteringPointFactory factory = previewView.getMeteringPointFactory();
                         MeteringPoint point = factory.createPoint(motionEvent.getX(), motionEvent.getY());
@@ -179,24 +222,102 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                             public void run() {
                                 focusSquare.setVisibility(View.INVISIBLE);
                             }
-                        }, 500);
+                            }, 500);
+
                         return true;
+
                     case MotionEvent.ACTION_MOVE:
-                        if(motionEvent.getPointerCount() == 2){
-                            /*
-                            double now_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1)); // 두 손가락 X좌표 차이 절대값
-                            double now_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1)); // 두 손가락 Y좌표 차이 절대값
-                            if(touch_interval_X < now_interval_X && touch_interval_Y < now_interval_Y) { // 이전 값과 비교
-                             }
-                            mScaleGestureDetector.onTouchEvent(motionEvent);
-                             */
+
+
+                        if(motionEvent.getPointerCount() == 2) {
+
+                            try {
+
+                                //double touch_interval_X = Math.abs(first_X - second_X);
+                                //double touch_interval_Y = Math.abs(first_Y - second_Y);
+                                //double first_distance = Math.sqrt(Math.pow(touch_interval_X, 2) + Math.pow(touch_interval_Y, 2));
+                                //Log.e("TEST","First and Second Touch Distance = " + first_distance);
+
+                                double now_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1)); // 두 손가락 X좌표 차이 절대값
+                                //Log.e("TEST","X 좌표 1 = " + motionEvent.getX(0));
+                                //Log.e("TEST","X 좌표 2 = " + motionEvent.getX(1));
+                                double now_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1)); // 두 손가락 Y좌표 차이 절대값
+                                double now_distance = Math.sqrt(Math.pow(now_interval_X, 2) + Math.pow(now_interval_Y, 2));
+
+                                //double zoom_scale = now_distance / touch_distance;
+                                //Log.e("TEST","zoom scale = " + zoom_scale);
+
+//                                if(now_distance > touch_distance){ // 움직였을때 처음 두 손가락의 위치보다 멀어진다면 (now distance increase / decrease 여부 판단)
+//                                    //zoom in
+//                                    //camera.getCameraControl().setLinearZoom((float) Math.abs((now_distance - touch_distance) / touch_distance));
+//                                    camera.getCameraControl().setLinearZoom((float) Math.abs( 1 -(touch_distance / now_distance)));
+//                                    Log.e("TEST","zoom in ratio = " + Math.abs( 1 -(touch_distance / now_distance)));
+//                                }
+//                                if(now_distance < touch_distance){ // 줄어든다면
+//                                    //zoom out
+//                                    camera.getCameraControl().setLinearZoom((float) Math.abs((now_distance / touch_distance)));
+//                                    Log.e("TEST","zoom out ratio = " + Math.abs((now_distance / touch_distance)));
+//                                }
+
+                                float zoom_delta = (float) (now_distance / initial_distance); // 현재 줌인/줌아웃을 하기 위해 당긴 거리와 처음 화면에 댔을때 거리의 차이
+                                float zoom_delta_trasposed = zoom_delta - 1.f; // 예) 줌아웃: 0.8 , 줌인: 1.2라면 같은 비율로 밀거나 당겨지기 위해 1을 빼 -0.2, 0.2를 만듬
+                                final float zoom_ratio = 0.25f; // 너무 빨리 움직이므로 속도를 줄이기 위해
+                                camera.getCameraControl().setLinearZoom(initial_zoom + (zoom_delta_trasposed * zoom_ratio)); // 원래 카메라의 줌값에 1을뺀 값(줌 비율)을 0.25만큼 곱한 값을 더함
+                                //줌아웃이 될때는 느려지는데 고치는법?
+                                Log.e("TEST","Current zoom = " + (initial_zoom + (zoom_delta_trasposed * zoom_ratio)));
+
+//                              camera.getCameraControl().setLinearZoom((float) (initial_zoom * zoom_delta));
+
+                                //Log.e("TEST","First Distance = " + first_distance);
+                                //Log.e("TEST", "Now Distance = " + now_distance);
+
+                                //camera.getCameraControl().setLinearZoom((float) (zoom_scale));
+/*
+                                if (first_distance < now_distance) {
+                                    //Log.e("TEST", "Distance Difference = " + (now_distance - first_distance));
+                                    camera.getCameraControl().setLinearZoom((float) (now_distance - first_distance) / 300);
+                                    //camera.getCameraControl().setLinearZoom((float)(now_interval_X + now_interval_Y) / 950);
+                                }
+                                if (now_distance < first_distance) {
+                                    camera.getCameraControl().setLinearZoom((float) (first_distance - now_distance) / 1000);
+                                }
+*/
+
+                            } catch (IllegalArgumentException e) {
+                                e.printStackTrace();
+                            }
+                            return true;
+
                         }
+
+                            /*
+                            Log.e("TEST","touch_X = " + motionEvent.getX());
+                            Log.e("TEST","now_interval_X = " + now_interval_X);
+                            Log.e("TEST","touch_Y = " + motionEvent.getY());
+                            Log.e("TEST","now_interval_Y = " + now_interval_Y);
+                            Log.e("TEST","zoom = " + (float)(now_interval_X + now_interval_Y) / 900);
+                            if(touch_interval_X < now_interval_X && touch_interval_Y < now_interval_Y) { // 이전 값과 비교
+                                //줌인
+                                camera.getCameraControl().setLinearZoom((float)(now_interval_X + now_interval_Y) / 950);
+                                //Log.e("TEST","zoom ratio = " + (float)(now_interval_X + now_interval_Y) / 900);
+                                //camera.getCameraControl().setZoomRatio((float)(now_interval_X + now_interval_Y) / 900);
+                             }
+                            if(touch_interval_X > now_interval_X && touch_interval_Y > now_interval_Y) {
+                                //줌아웃
+                                camera.getCameraControl().setLinearZoom((float)(now_interval_X + now_interval_Y) / 900);
+                                Log.e("TEST","now_interval_X = " + now_interval_X);
+                                Log.e("TEST","now_interval_Y = " + now_interval_Y);
+                                Log.e("TEST","now_sum = " + now_interval_X + now_interval_Y);
+                            }
+                            */
+
                     default:
                         return false;
                 }
             }
         });
 
+/*
         flash.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -219,6 +340,22 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                 }
             }
         });
+*/
+        flash.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View view){
+                if(flashOn == false) {
+                    if (camera.getCameraInfo().hasFlashUnit()) {
+                        camera.getCameraControl().enableTorch(true);
+                    }
+                    flashOn = true;
+                } else{
+                    camera.getCameraControl().enableTorch(false);
+                    flashOn = false;
+                }
+            }
+        });
+
 
 
 
@@ -280,7 +417,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             bind();
         }
     });
-
+/*
     private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
         @Override
         public boolean onScale(ScaleGestureDetector scaleGestureDetector){
@@ -288,7 +425,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             mScaleFactor *= scaleGestureDetector.getScaleFactor();
 
             // 최대 10배, 최소 10배 줌 한계 설정
-            mScaleFactor = Math.max(0.1f, Math.min(mScaleFactor, 10.0f));
+            mScaleFactor = Math.max(0.5f, Math.min(mScaleFactor, 10.0f));
 
             // 프리뷰 스케일에 적용
             previewView.setScaleX(mScaleFactor);
@@ -296,6 +433,29 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             return true;
         }
     }
+
+*/
+    @Override
+    public boolean onTouchEvent(MotionEvent event){
+        mScaleGestureDetector.onTouchEvent(event);
+        return true;
+    }
+
+    public class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
+        @Override
+        public boolean onScale(ScaleGestureDetector detector){
+            float gesturefactor = detector.getScaleFactor();
+
+            if(gesturefactor > 1){
+                //zoom in
+            }
+            else{
+                //zoom in
+            }
+            return true;
+        }
+    }
+
 
     public void saveImage(Bitmap rotatedBitmap){
         Uri images;
