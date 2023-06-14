@@ -11,22 +11,31 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
     tools:context=".MainActivity">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"/>
+
+    <ImageView
+        android:id="@+id/grayView"
+        android:scaleType="centerCrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
 
     <Button
+        android:elevation="15dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginLeft="60dp"
         android:layout_alignParentBottom="true"
         android:layout_marginBottom="40dp"
         android:id="@+id/record"
-        android:scaleType="centerCrop"
-        android:text="녹화" />
+        android:text="녹화"
+        android:textColor="@color/black"/>
+
 
     <Button
         android:layout_width="wrap_content"
@@ -36,7 +45,8 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         android:layout_alignParentBottom="true"
         android:layout_marginBottom="40sp"
         android:id="@+id/picture"
-        android:text="사진찍기"/>
+        android:text="사진찍기"
+        android:textColor="@color/black"/>
 
     <Button
         android:layout_width="wrap_content"
@@ -56,6 +66,7 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         android:layout_marginLeft="305dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:layout_marginTop="40dp"/>
+
 
     <Chronometer
         android:id="@+id/chronometer"
@@ -84,19 +95,19 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         android:layout_height="wrap_content"
         android:src="@drawable/focus_rectangle"
         android:layout_centerInParent="true"/>
-<!--
-    <SeekBar
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:id="@+id/zoombar"
-        android:max="50"
-        android:progress="20"
-        android:rotation="270"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        android:layout_marginLeft="350dp"/>
--->
+    <!--
+        <SeekBar
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:id="@+id/zoombar"
+            android:max="50"
+            android:progress="20"
+            android:rotation="270"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            android:layout_marginLeft="350dp"/>
+    -->
     <SeekBar
         android:id="@+id/zoombar"
         android:layout_width="match_parent"
@@ -111,6 +122,8 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         />
+
+
 
 </RelativeLayout>
 

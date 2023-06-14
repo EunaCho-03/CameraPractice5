@@ -1,25 +1,38 @@
 package com.example.camerapractice5;
 
+import static androidx.camera.view.PreviewView.ImplementationMode.COMPATIBLE;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.ContentValues;
-import android.content.pm.PackageManager;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.ImageFormat;
+import android.graphics.Matrix;
+import android.graphics.YuvImage;
 import android.graphics.Color;
-import android.hardware.camera2.CameraAccessException;
+import android.graphics.drawable.Drawable;
 import android.hardware.camera2.CameraManager;
 import android.media.Image;
+import android.media.ImageReader;
 import android.media.MediaActionSound;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.util.DisplayMetrics;
+import android.view.Display;
 import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
+import android.view.Surface;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.Toast;
 import android.widget.ImageView;
@@ -35,11 +48,15 @@ import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.FocusMeteringAction;
+import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.MeteringPoint;
+import androidx.camera.core.DisplayOrientedMeteringPointFactory;
 import androidx.camera.core.MeteringPointFactory;
 import androidx.camera.core.Preview;
+import androidx.camera.core.resolutionselector.AspectRatioStrategy;
+import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.video.MediaStoreOutputOptions;
 import androidx.camera.video.Quality;
@@ -53,13 +70,24 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Consumer;
 
+import com.bumptech.glide.Glide;
+
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.android.OpenCVLoader;
+
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
-public class MainActivity extends AppCompatActivity { // 하위버전 단말기에 실행 안되는 메소드를 지원하기 위해 AppCompatActivity를 extend함
+public class MainActivity extends AppCompatActivity implements ImageAnalysis.Analyzer{ // 하위버전 단말기에 실행 안되는 메소드를 지원하기 위해 AppCompatActivity를 extend함
     //버튼이나 필요한 API들 k선언하기
     Recording recording = null; // 실제 녹화를 실행함
     Chronometer chronometer;
@@ -68,18 +96,22 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
     VideoCapture<Recorder> videoCapture = null;
     Button record, picture, flipCamera, flash;
     boolean flashOn = false;
-    PreviewView previewView;
+    static PreviewView previewView;
+//    ImageView previewView;
+    ImageView grayView;
     ImageView imageView;
     ImageView focusSquare;
     Camera camera;
+    Image image;
     ImageCapture imageCapture;
+    ImageAnalysis imageAnalysis;
     ProcessCameraProvider processCameraProvider;
     int cameraFacing = CameraSelector.LENS_FACING_BACK;
     CameraManager cameraManager;
     String getCameraID;
-
+    //Byte[] bytes = previewView;
+    ImageReader imageReader;
     SeekBar zoombar;
-    ScaleGestureDetector mScaleGestureDetector;
     //private float mScaleFactor = 1.0f;
 
     //double first_interval_X = 0; // X 터치 간격
@@ -93,15 +125,30 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
     double second_X = 0;
     double second_Y = 0;
     float initial_ratio;
-
+    static Mat mat;
+    Mat matInput;
+    Mat matResult;
+    byte[]buffer = new byte[10];
+    Display display;
+    Activity activity;
+    int degrees = 0;
+    int rotation = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        if(OpenCVLoader.initDebug()){
+            Log.d("Loaded","Success");
+        }else{
+            Log.d("Loaded","error");
+        }
+
         previewView = findViewById(R.id.previewView);
+        grayView = findViewById(R.id.grayView);
         record = findViewById(R.id.record);
+        record.setVisibility(View.VISIBLE);
         picture = findViewById(R.id.picture);
         flipCamera = findViewById(R.id.flipCamera);
         imageView = findViewById(R.id.imageView);
@@ -112,27 +159,18 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         chronometer.setVisibility(View.INVISIBLE);
         zoombar=findViewById(R.id.zoombar);
         flash=findViewById(R.id.flash);
-        mScaleGestureDetector = new ScaleGestureDetector(this, new ScaleListener());
+
+        //display = ((WindowManager)getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
+//        //rotation = display.getRotation();
+//        rotation = (int) previewView.getRotation();
+//        Log.e("TEST","rotation = " + rotation);
+//        previewView.setRotation(rotation);
 
 
-        cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-        try {
-            getCameraID = cameraManager.getCameraIdList()[0];
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
-/*
-        if(camera.getCameraInfo().hasFlashUnit()){
-            camera.getCameraControl().enableTorch(true);
-        }
-*/
         zoombar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 camera.getCameraControl().setLinearZoom((float) zoombar.getProgress()/seekBar.getMax());
-                //Log.e("TEST","seekBar_Max = " + seekBar.getMax());
-                //Log.e("TEST","progress = " + zoombar.getProgress());
-                //Log.e("TEST","Zoom_Ratio = " + (float) zoombar.getProgress() / seekBar.getMax());
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
@@ -156,80 +194,114 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
         if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             activityResultLauncher.launch(Manifest.permission.CAMERA);
         }else {
+            Log.e("TEST","Going to bind");
             bind();
         }
 
+        // Get the WindowManager service
+        WindowManager windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+
+        Display display = windowManager.getDefaultDisplay();
+
+        display.getMetrics(displayMetrics);
+
+
+        int maxX = displayMetrics.widthPixels;
+        Log.e("TEST","Max X = " + maxX);
+        int maxY = displayMetrics.heightPixels;
+        Log.e("TEST","Max Y = " + maxY);
+        Log.e("TEST","Ratio = " + ((float)maxY / (float)maxX));
+
 
         previewView.setOnTouchListener(new View.OnTouchListener() {
+            @SuppressLint("RestrictedApi")
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
-
-                //mScaleGestureDetector.onTouchEvent(motionEvent);
                 switch (motionEvent.getAction() & MotionEvent.ACTION_MASK) {
 
                     case MotionEvent.ACTION_DOWN:
-                        /*
-                        first_X = motionEvent.getX();
-                        first_Y = motionEvent.getY();
-                        Log.e("TEST", "First X = " + first_X);
-                        Log.e("TEST","First Y = " + first_Y);
 
-                         */
-/*
-                        try {
-                            double first_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1)); // 두 손가락 X좌표 차이 절대값
-                            double first_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1)); // 두 손가락 Y좌표 차이 절대값
-                            double first_distance = Math.sqrt(Math.pow(first_interval_X, 2) + Math.pow(first_interval_Y, 2));
-                            Log.e("TEST","ACTION_DOWN pass");
-                            return true;
-                        } catch (IllegalArgumentException e) {
-                            e.printStackTrace();
-                            Log.e("TEST", "Exception" + e.getMessage());
-                        }
-*/
                         return true;
 
                     case MotionEvent.ACTION_POINTER_DOWN:
 
                         initial_ratio = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getZoomRatio();
-
                         initial_zoom = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getLinearZoom();
-                        //Log.e("TEST","Liear Zoom = " + camera.getCameraInfo().getZoomState().getValue().getLinearZoom());
-                        //Log.e("TEST","Max Zoom = " + camera.getCameraInfo().getZoomState().getValue().getMaxZoomRatio());
-                        //Log.e("TEST","Min Zoom = " + camera.getCameraInfo().getZoomState().getValue().getMinZoomRatio());
-                        //Log.e("TEST","Zoom ratio = " + camera.getCameraInfo().getZoomState().getValue().getZoomRatio());
 
-                        /*
-                        second_X = motionEvent.getX();
-                        second_Y = motionEvent.getY();
-                        Log.e("TEST", "Second X = " + second_X);
-                        Log.e("TEST", "Second Y = " + second_Y);
-
-                         */
                         double touch_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1));
-                        //Log.e("TEST","X 좌표 1 = " + motionEvent.getX(0));
-                        //Log.e("TEST","X 좌표 2 = " + motionEvent.getX(1));
                         double touch_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1));
                         initial_distance = Math.sqrt(Math.pow(touch_interval_X, 2) + Math.pow(touch_interval_Y, 2));
-                       //Log.e("TEST","Touch Distance = " + initial_distance);
-
                         return true;
 
                     case MotionEvent.ACTION_UP:
+                        //가로모드일때는 둘 다 잘됨. 하지만 이미지뷰를 rotate시켜놔서 그런지 세로모드일때는 focusSquare은 잘 보여지지만 focus가 안맞음. 그래서 rotate 시켜놓으면 반대로 포커스는 맞는데 focusSquare 위치가 틀림
                         MeteringPointFactory factory = previewView.getMeteringPointFactory();
-                        MeteringPoint point = factory.createPoint(motionEvent.getX(), motionEvent.getY());
-                        FocusMeteringAction action = new FocusMeteringAction.Builder(point).build();
-                        CameraControl cameraControl = camera.getCameraControl();
-                        cameraControl.startFocusAndMetering(action);
-                        focusSquare.setX(motionEvent.getX());
-                        focusSquare.setY(motionEvent.getY());
+                        float motionEventX = motionEvent.getX();
+                        float motionEventY = motionEvent.getY();
+                        Log.e("TEST", "X = " + motionEventX + " Y = " + motionEventY);
+                        focusSquare.setX(motionEventX - (focusSquare.getWidth() / 2));
+                        focusSquare.setY(motionEventY - (focusSquare.getHeight() / 2));
                         focusSquare.setVisibility(View.VISIBLE);
                         new Handler().postDelayed(new Runnable() {
                             @Override
                             public void run() {
                                 focusSquare.setVisibility(View.INVISIBLE);
                             }
-                            }, 500);
+                        }, 500);
+
+                        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                        MeteringPoint point = factory.createPoint(motionEvent.getX(), motionEvent.getY());
+                        FocusMeteringAction action = new FocusMeteringAction.Builder(point).build();
+                        CameraControl cameraControl = camera.getCameraControl();
+                        cameraControl.startFocusAndMetering(action);
+                        }
+
+                        else if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
+                            float rotatedMeteringX = motionEventY;
+                            float rotatedMeteringY = previewView.getHeight() - motionEventX;
+                            MeteringPoint point = factory.createPoint((float)((motionEventY) / 1.97), (float) (maxX - motionEventX / 1.97));
+                            //MeteringPoint point = factory.createPoint(maxX - motionEventX,motionEventY);
+                            Log.e("TEST", "RotatedX = " + (float)((motionEventY) / 1.97) + " RotatedY = " + (float) (maxX - motionEventX / 1.97));
+                            FocusMeteringAction action = new FocusMeteringAction.Builder(point).build();
+                            CameraControl cameraControl = camera.getCameraControl();
+                            cameraControl.startFocusAndMetering(action);
+                        }
+
+//                        float rotatedX = motionEvent.getX();
+//                        float rotatedY = motionEvent.getY();
+//                        Matrix matrix = new Matrix();
+//                        matrix.postRotate(90);
+//                        float[] points = {rotatedX, rotatedY};
+//                        matrix.mapPoints(points);
+//                        float rotatedMeteringX = points[0];
+//                        float rotatedMeteringY = points[1];
+//
+//                        focusSquare.setX(motionEvent.getX() - (focusSquare.getWidth() / 2));
+//                        focusSquare.setY(motionEvent.getY() - (focusSquare.getHeight() / 2));
+//                        Log.e("TEST", "x = " + motionEvent.getX() + " y = " + motionEvent.getY());
+//                        focusSquare.setVisibility(View.VISIBLE);
+//                        new Handler().postDelayed(new Runnable() {
+//                            @Override
+//                            public void run() {
+//                                focusSquare.setVisibility(View.INVISIBLE);
+//                            }
+//                        }, 500);
+//
+//                        MeteringPointFactory factory = previewView.getMeteringPointFactory();
+//                        MeteringPoint point = factory.createPoint(motionEvent.getX(), motionEvent.getY());
+//                        FocusMeteringAction action = new FocusMeteringAction.Builder(point).build();
+//                        CameraControl cameraControl = camera.getCameraControl();
+//                        cameraControl.startFocusAndMetering(action);
+
+
+
+
+                        //float originalRotation = previewView.getRotation();
+                        //previewView.setRotation(originalRotation + 90);
+
+                        //previewView.setRotation(originalRotation);
 
                         return true;
 
@@ -240,49 +312,42 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
 
                             try {
 
-                                //double touch_interval_X = Math.abs(first_X - second_X);
-                                //double touch_interval_Y = Math.abs(first_Y - second_Y);
-                                //double first_distance = Math.sqrt(Math.pow(touch_interval_X, 2) + Math.pow(touch_interval_Y, 2));
-                                //Log.e("TEST","First and Second Touch Distance = " + first_distance);
-
                                 double now_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1)); // 두 손가락 X좌표 차이 절대값
-                                //Log.e("TEST","X 좌표 1 = " + motionEvent.getX(0));
-                                //Log.e("TEST","X 좌표 2 = " + motionEvent.getX(1));
                                 double now_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1)); // 두 손가락 Y좌표 차이 절대값
                                 double now_distance = Math.sqrt(Math.pow(now_interval_X, 2) + Math.pow(now_interval_Y, 2));
+/*
+                                double zoom_scale = now_distance / touch_distance;
+                                Log.e("TEST","zoom scale = " + zoom_scale);
 
-                                //double zoom_scale = now_distance / touch_distance;
-                                //Log.e("TEST","zoom scale = " + zoom_scale);
-
-//                                if(now_distance > touch_distance){ // 움직였을때 처음 두 손가락의 위치보다 멀어진다면 (now distance increase / decrease 여부 판단)
-//                                    //zoom in
-//                                    //camera.getCameraControl().setLinearZoom((float) Math.abs((now_distance - touch_distance) / touch_distance));
-//                                    camera.getCameraControl().setLinearZoom((float) Math.abs( 1 -(touch_distance / now_distance)));
-//                                    Log.e("TEST","zoom in ratio = " + Math.abs( 1 -(touch_distance / now_distance)));
-//                                }
-//                                if(now_distance < touch_distance){ // 줄어든다면
-//                                    //zoom out
-//                                    camera.getCameraControl().setLinearZoom((float) Math.abs((now_distance / touch_distance)));
-//                                    Log.e("TEST","zoom out ratio = " + Math.abs((now_distance / touch_distance)));
-//                                }
-
+                                if(now_distance > touch_distance){ // 움직였을때 처음 두 손가락의 위치보다 멀어진다면 (now distance increase / decrease 여부 판단)
+                                    //zoom in
+                                    //camera.getCameraControl().setLinearZoom((float) Math.abs((now_distance - touch_distance) / touch_distance));
+                                    camera.getCameraControl().setLinearZoom((float) Math.abs( 1 -(touch_distance / now_distance)));
+                                    Log.e("TEST","zoom in ratio = " + Math.abs( 1 -(touch_distance / now_distance)));
+                                }
+                                if(now_distance < touch_distance){ // 줄어든다면
+                                    //zoom out
+                                    camera.getCameraControl().setLinearZoom((float) Math.abs((now_distance / touch_distance)));
+                                    Log.e("TEST","zoom out ratio = " + Math.abs((now_distance / touch_distance)));
+                                }
+*/
                                 float zoom_delta = (float) (now_distance / initial_distance); // 현재 줌인/줌아웃을 하기 위해 당긴 거리와 처음 화면에 댔을때 거리의 차이
                                 float zoom_delta_trasposed = zoom_delta - 1.f; // 예) 줌아웃: 0.8 , 줌인: 1.2라면 같은 비율로 밀거나 당겨지기 위해 1을 빼 -0.2, 0.2를 만듬
                                 final float zoom_ratio = 0.25f; // 너무 빨리 움직이므로 속도를 줄이기 위해
-                                //camera.getCameraControl().setLinearZoom(initial_zoom + (zoom_delta_trasposed * zoom_ratio)); // 원래 카메라의 줌값에 1을뺀 값(줌 비율)을 0.25만큼 곱한 값을 더함
-                                //줌아웃이 될때는 느려지는데 고치는법?
+                                camera.getCameraControl().setLinearZoom(initial_zoom + (zoom_delta_trasposed * zoom_ratio)); // 원래 카메라의 줌값에 1을뺀 값(줌 비율)을 0.25만큼 곱한 값을 더함
+                                //줌아웃이 될때는 느려지는데 고치는법? - SetZoomRatio를 사용했음
                                 //Log.e("TEST","Current zoom = " + (initial_zoom + (zoom_delta_trasposed * zoom_ratio)));
 
-                                camera.getCameraControl().setZoomRatio(initial_ratio*zoom_delta); // 원래 확대 비율 * 거리 비율
-                                Log.e("TEST","Current zoom = " + zoom_delta);
-
-//                              camera.getCameraControl().setLinearZoom((float) (initial_zoom * zoom_delta));
-
-                                //Log.e("TEST","First Distance = " + first_distance);
-                                //Log.e("TEST", "Now Distance = " + now_distance);
-
-                                //camera.getCameraControl().setLinearZoom((float) (zoom_scale));
+                                //camera.getCameraControl().setZoomRatio(initial_ratio*zoom_delta); // 원래 확대 비율 * 거리 비율
+                                //Log.e("TEST","Current zoom = " + zoom_delta);
 /*
+                              camera.getCameraControl().setLinearZoom((float) (initial_zoom * zoom_delta));
+
+                                Log.e("TEST","First Distance = " + first_distance);
+                                Log.e("TEST", "Now Distance = " + now_distance);
+
+                                camera.getCameraControl().setLinearZoom((float) (zoom_scale));
+
                                 if (first_distance < now_distance) {
                                     //Log.e("TEST", "Distance Difference = " + (now_distance - first_distance));
                                     camera.getCameraControl().setLinearZoom((float) (now_distance - first_distance) / 300);
@@ -327,30 +392,6 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
             }
         });
 
-/*
-        flash.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (flashOn == false) {
-                    try {
-                        cameraManager.setTorchMode(getCameraID, true);
-                        flashOn = true;
-                        Toast.makeText(MainActivity.this, "Flashlight is turned ON", Toast.LENGTH_SHORT).show();
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();
-                    }
-                } else {
-                    try {
-                        cameraManager.setTorchMode(getCameraID, false);
-                        flashOn = false;
-                        Toast.makeText(MainActivity.this, "Flashlight is turned OFF", Toast.LENGTH_SHORT).show();
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        });
-*/
         flash.setOnClickListener(new View.OnClickListener(){
             @Override
             public void onClick(View view){
@@ -365,9 +406,6 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                 }
             }
         });
-
-
-
 
         flipCamera.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -445,26 +483,7 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
     }
 
 */
-    @Override
-    public boolean onTouchEvent(MotionEvent event){
-        mScaleGestureDetector.onTouchEvent(event);
-        return true;
-    }
 
-    public class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
-        @Override
-        public boolean onScale(ScaleGestureDetector detector){
-            float gesturefactor = detector.getScaleFactor();
-
-            if(gesturefactor > 1){
-                //zoom in
-            }
-            else{
-                //zoom in
-            }
-            return true;
-        }
-    }
 
 
     public void saveImage(Bitmap rotatedBitmap){
@@ -481,7 +500,14 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
 
         try{
             OutputStream outputStream = contentResolver.openOutputStream(Objects.requireNonNull(uri));
-            rotatedBitmap.compress(Bitmap.CompressFormat.JPEG,100, outputStream);
+            mat=new Mat();
+            Bitmap gray_bitmap = Bitmap.createBitmap(rotatedBitmap);
+
+            Utils.bitmapToMat(gray_bitmap, mat);
+            Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGB2GRAY);
+            Utils.matToBitmap(mat, gray_bitmap);
+
+            gray_bitmap.compress(Bitmap.CompressFormat.JPEG,100, outputStream);
             String msg = "촬영 완료: " + images;
             Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
 
@@ -567,8 +593,133 @@ public class MainActivity extends AppCompatActivity { // 하위버전 단말기�
                 .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
                 .build();
         videoCapture = VideoCapture.withOutput(recorder);
-        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture);
+        ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
+        selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
+
+        imageAnalysis = new ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setResolutionSelector(selectorBuilder.build())
+                .build();
+        imageAnalysis.setAnalyzer(getMainExecutor(), this);
+
+        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture, imageAnalysis);
+
+        //camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture);
+        //grayPreview(); //pass bytes
     }
+
+    /*
+    void bindAnalyzer(){
+        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing)
+                .build();
+        ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
+        selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
+
+        imageAnalysis = new ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setResolutionSelector(selectorBuilder.build())
+                .build();
+        imageAnalysis.setAnalyzer(getMainExecutor(), this);
+
+        camera = processCameraProvider.bindToLifecycle(this, cameraSelector,imageAnalysis);
+    }
+*/
+
+
+//    void grayPreview(byte[] bytes){
+//
+//        //Image img = imageReader.acquireLatestImage();
+//        //byte[] b = new byte[image.getPlanes()[0].getBuffer().remaining()];
+//        //image.getPlanes()[0].getBuffer().get(b);
+//        int width = previewView.getWidth();
+//        int height = previewView.getHeight();
+//        //ByteArrayInputStream in = new ByteArrayInputStream(buffer);
+//        ByteArrayOutputStream out = new ByteArrayOutputStream();
+//        YuvImage image = new YuvImage(bytes, ImageFormat.NV21, width, height, null);
+//        //byte[] bytes2 = out.toByteArray();
+//    /*
+//        Bitmap.Config configBmp = Bitmap.Config.valueOf(bitmap.getConfig().name());
+//        Bitmap bitmap_tmp = Bitmap.createBitmap(width, height, configBmp);
+//        ByteBuffer buffer = ByteBuffer.wrap(byteArray);
+//        bitmap_tmp.copyPixelsFromBuffer(buffer);
+//     */
+//        Bitmap bmp = BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size());
+//
+//        //Bitmap bmp= BitmapFactory.decodeByteArray(bytes2, 0, bytes2.length);
+//
+//        Utils.bitmapToMat(bmp, mat);
+//        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGB2GRAY);
+//        Utils.matToBitmap(mat, bmp);
+//    }
+
+    /*
+    @Override
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame){
+        matInput = inputFrame.rgba();
+        matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
+        Bitmap returnedBitmap = previewView.getBitmap();
+        Utils.bitmapToMat(returnedBitmap,matInput);
+        Imgproc.cvtColor(matInput,matResult,Imgproc.COLOR_RGB2GRAY);
+        return matResult;
+    }
+     */
+
+/*
+    public static Bitmap changeToGray(View view){
+        Log.e("TEST","changetoGrayFunction");
+        //Bitmap returnedBitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(),Bitmap.Config.ARGB_8888);
+        Bitmap returnedBitmap = previewView.getBitmap();
+        mat=new Mat();
+        Utils.bitmapToMat(returnedBitmap,mat);
+        Imgproc.cvtColor(mat,mat,Imgproc.COLOR_RGB2GRAY);
+        Utils.matToBitmap(mat,returnedBitmap);
+        return returnedBitmap;
+    }
+*/
+
+    @Override
+    public void analyze(@NonNull ImageProxy image) {
+        //Log.e("TEST","Analyzer arrived");
+//        final Bitmap bitmap = previewView.getBitmap();
+
+        //Image mediaImg = image.getImage();
+        //Log.e("TEST","analyze image width = " + image.getWidth() + " height = " + image.getHeight());
+        Bitmap bitmap = image.toBitmap();
+        image.close();
+        toGray(bitmap);
+        rotation = image.getImageInfo().getRotationDegrees();
+        //Log.e("TEST","Rotation = " + rotation);
+        Bitmap rotated = ImageUtil.rotateBitmap(bitmap, rotation);
+        //bitmapToByteArray(bitmap);
+        grayView.setImageBitmap(rotated);
+
+    }
+
+    private Bitmap toGray(Bitmap bitmap){
+        mat=new Mat();
+        Utils.bitmapToMat(bitmap,mat);
+        Imgproc.cvtColor(mat,mat,Imgproc.COLOR_RGB2GRAY);
+        Utils.matToBitmap(mat,bitmap);
+        //Log.e("TEST","Bitmap width = " + bitmap.getWidth() + " height = " + bitmap.getHeight());
+        return bitmap;
+    }
+
+    /*
+    public void bitmapToByteArray(Bitmap bitmap){
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG,100,out);
+        byte[]byteArray = out.toByteArray();
+        ByteArrayInputStream in = new ByteArrayInputStream(byteArray);
+    }
+*/
+
+    public byte[]bitmapToByteArray(Bitmap bitmap){
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG,100,out);
+        byte[]byteArray = out.toByteArray();
+        return byteArray;
+    }
+
 
     @Override
     protected void onDestroy() {
