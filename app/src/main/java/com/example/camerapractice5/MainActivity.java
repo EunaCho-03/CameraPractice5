@@ -88,6 +88,8 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity implements ImageAnalysis.Analyzer{ // 하위버전 단말기에 실행 안되는 메소드를 지원하기 위해 AppCompatActivity를 extend함
+    //ImageAnalysis.Analyzer = 인터페이스 상속(나중에 analyze 함수를 오버라이드 하기 위해서)
+
     //버튼이나 필요한 API들 k선언하기
     Recording recording = null; // 실제 녹화를 실행함
     Chronometer chronometer;
@@ -139,7 +141,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        if(OpenCVLoader.initDebug()){
+        if(OpenCVLoader.initDebug()){ //OpenCv 잘 가지고 왔는지 확인
             Log.d("Loaded","Success");
         }else{
             Log.d("Loaded","error");
@@ -593,16 +595,19 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                 .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
                 .build();
         videoCapture = VideoCapture.withOutput(recorder);
-        ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
-        selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
 
-        imageAnalysis = new ImageAnalysis.Builder()
+        ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder(); //imageAnalysis에서 selectorBuilder.build하기 위해 빌더 만들기
+        selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY); //16:9 화면으로 받아옴
+        imageAnalysis = new ImageAnalysis.Builder() // 이미지 분석 케이스 (카메라 프레임과 함께 호출됨)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setResolutionSelector(selectorBuilder.build())
+                //비차단 모드 (이 모드에서 실행자는 analyze() 메서드가 호출되는 시점에 카메라에서 마지막으로 사용 가능한 프레임을 수신함
+                //analyze() 메서드의 현재 프레임 속도가 단일 프레임의 지연 시간보다 느린 경우 analyze()가
+                //다음번에 데이터를 수신할 때 카메라 파이프라인에서 사용 가능한 최신 프레임을 가져오도록 몇몇 프레임을 건너뛸 수 있음
+                .setResolutionSelector(selectorBuilder.build()) // 해상도를 지정할 수 있는 클래스 빌드
                 .build();
-        imageAnalysis.setAnalyzer(getMainExecutor(), this);
+        imageAnalysis.setAnalyzer(getMainExecutor(), this); // 이미지를 받고 분석하기 위한 analyzer를 세팅함
 
-        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture, imageAnalysis);
+        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture, imageAnalysis); // 바인딩에 ImageAnalysis 포함시키기
 
         //camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture);
         //grayPreview(); //pass bytes
@@ -678,30 +683,28 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 */
 
     @Override
-    public void analyze(@NonNull ImageProxy image) {
+    public void analyze(@NonNull ImageProxy image) { // 이미지 받아옴
         //Log.e("TEST","Analyzer arrived");
 //        final Bitmap bitmap = previewView.getBitmap();
 
         //Image mediaImg = image.getImage();
         //Log.e("TEST","analyze image width = " + image.getWidth() + " height = " + image.getHeight());
-        Bitmap bitmap = image.toBitmap();
-        image.close();
-        toGray(bitmap);
-        rotation = image.getImageInfo().getRotationDegrees();
-        //Log.e("TEST","Rotation = " + rotation);
-        Bitmap rotated = ImageUtil.rotateBitmap(bitmap, rotation);
-        //bitmapToByteArray(bitmap);
-        grayView.setImageBitmap(rotated);
+        Bitmap bitmap = image.toBitmap(); // 이미지를 비트맵으로 바꾸고
+        image.close(); // 현재 보여지는 이미지를 닫고
+        toGray(bitmap); // 받은 비트맵을 회색으로 변환시키는 함수 호출
+        rotation = image.getImageInfo().getRotationDegrees(); // 렌즈 때문에 사진을 찍고 올려지는 이미지뷰 사진이 회전되었던것처럼 회전된 각도를 알아내고
+        Bitmap rotated = ImageUtil.rotateBitmap(bitmap, rotation); // 그 각도만큼 비트맵 회전시킴
+        grayView.setImageBitmap(rotated); // 회전시킨 비트맵을 grayView라는 이미지뷰에 넣기
 
     }
 
     private Bitmap toGray(Bitmap bitmap){
         mat=new Mat();
-        Utils.bitmapToMat(bitmap,mat);
-        Imgproc.cvtColor(mat,mat,Imgproc.COLOR_RGB2GRAY);
-        Utils.matToBitmap(mat,bitmap);
+        Utils.bitmapToMat(bitmap,mat); // 비트맵을 mat으로 변환
+        Imgproc.cvtColor(mat,mat,Imgproc.COLOR_RGB2GRAY); // 바꾼 mat을 회색으로 바꿈
+        Utils.matToBitmap(mat,bitmap); // 다시 mat을 비트맵으로 변환
         //Log.e("TEST","Bitmap width = " + bitmap.getWidth() + " height = " + bitmap.getHeight());
-        return bitmap;
+        return bitmap; // 비트맵 리턴
     }
 
     /*
