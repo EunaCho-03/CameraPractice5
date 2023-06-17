@@ -88,6 +88,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.List;
@@ -105,9 +106,10 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     private Mat matResult;
     private CameraBridgeViewBase mOpenCvCameraView;
 
-    public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
-    //public native void ConvertRGBtoGray_withoutCV(byte[] in, byte[] out, int w, int h);
-
+    //public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
+    public native void ConvertRGBtoGray_withoutCV(byte[] in, byte[] out, int w, int h);
+    byte[]out = null;
+    Bitmap outBitmap = null;
 
     static {
         System.loadLibrary("opencv_java4");
@@ -236,10 +238,10 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
 
         int maxX = displayMetrics.widthPixels;
-        Log.e("TEST", "Max X = " + maxX);
+        //Log.e("TEST", "Max X = " + maxX);
         int maxY = displayMetrics.heightPixels;
-        Log.e("TEST", "Max Y = " + maxY);
-        Log.e("TEST", "Ratio = " + ((float) maxY / (float) maxX));
+        //Log.e("TEST", "Max Y = " + maxY);
+        //Log.e("TEST", "Ratio = " + ((float) maxY / (float) maxX));
 
 
         previewView.setOnTouchListener(new View.OnTouchListener() {
@@ -553,36 +555,64 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     public void analyze(@NonNull ImageProxy image) {
         Bitmap bitmap = image.toBitmap();
         image.close();
-        toGray(bitmap);
+        Bitmap gray = toGray(bitmap);
         rotation = image.getImageInfo().getRotationDegrees();
-        Log.e("TEST", "rotation "+rotation);
-        Bitmap rotated = ImageUtil.rotateBitmap(bitmap, rotation);
+        //Log.e("TEST", "rotation "+rotation);
+        Bitmap rotated = ImageUtil.rotateBitmap(gray, rotation);
         grayView.setImageBitmap(rotated);
     }
 
     private Bitmap toGray(Bitmap bitmap){
-//        ByteArrayOutputStream out = new ByteArrayOutputStream();
-//        bitmap.compress(Bitmap.CompressFormat.JPEG,100,out);
-//        byte[]byteArray = out.toByteArray();
-//        ByteArrayInputStream in = new ByteArrayInputStream(byteArray);
+//        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+//        bitmap.compress(Bitmap.CompressFormat.PNG,100,stream);
+//        byte[]in = stream.toByteArray();
+        //ByteArrayInputStream in = new ByteArrayInputStream(byteArray);
+        byte[]in = bitmapToByteArray(bitmap);
+        //Log.e("TEST","bitmap height = " + bitmap.getHeight());
+        //Log.e("TEST","bitmap width = " + bitmap.getWidth());
+        Log.e("TEST","bitmap size = " + (bitmap.getHeight() * bitmap.getWidth()));
 
-        //ConvertRGBtoGray_withoutCV(in, out, maxX, maxY);
+        Log.e("TEST","byte[]in length = " + in.length);
+//        int length = in.length;
+//        for(int i = 0; i < length; i++){
+//            out[i] = in[i];
+//        }
+        //out = [in.length/3];
 
-        matInput=new Mat();
-        Utils.bitmapToMat(bitmap,matInput);
-        if ( matResult == null )
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        if(out == null)
+        {
+            out = new byte[width * height];
+        }
+        if(outBitmap == null)
+        {
+            outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8);
+        }
+        //Log.e("TEST","width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
+        ConvertRGBtoGray_withoutCV(in, out, width, height);
 
-            matResult = new Mat(matInput.rows(), matInput.cols(), matInput.type());
+        ByteBuffer buffer = ByteBuffer.wrap(out);
+        outBitmap.copyPixelsFromBuffer(buffer);
 
-        ConvertRGBtoGray(matInput.getNativeObjAddr(), matResult.getNativeObjAddr());
-        Utils.matToBitmap(matResult,bitmap);
-        return bitmap; // 비트맵 리턴
+        return outBitmap; // 비트맵 리턴
+    }
+    public byte[] bitmapToByteArray(Bitmap bitmap) {
+        //int bytes = bitmap.getRowBytes() * bitmap.getHeight();
+        int bytes = bitmap.getByteCount();
+        Log.e("TEST","Bitmap byte count = " + bytes);
+
+        //int bytes = bitmap.getHeight() * bitmap.getWidth();
+        ByteBuffer buffer = ByteBuffer.allocate(bytes);
+        //buffer.rewind();
+        bitmap.copyPixelsToBuffer(buffer);
+        return buffer.array();
     }
 
     @Override
     protected void onDestroy() {
-
         super.onDestroy();
     }
 }
+
 
