@@ -59,7 +59,7 @@ Java_com_example_camerapractice5_MainActivity_ConvertRGBtoGray_1withoutCV(JNIEnv
 
     //Mat alpha(h, w, CV_8UC1, Scalar(255));
 
-    std::vector<Mat> chan_dst; //채널 도착지점
+    std::vector<Mat> chan_dst; //채널 도착지점. 벡터는 행렬, 여기서 < >안에 넣을 데이터타입을 선언
     cv::split(matOut, chan_dst); //4채널을 가진 matOut을 split해서 각각의 한채널을 chan_dst 배열에 담는다
 
     for(int i=0; i<3; i++)
