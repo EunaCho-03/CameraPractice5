@@ -559,7 +559,25 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         rotation = image.getImageInfo().getRotationDegrees();
         //Log.e("TEST", "rotation "+rotation);
         Bitmap rotated = ImageUtil.rotateBitmap(gray, rotation);
-        grayView.setImageBitmap(rotated);
+        DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+        int screenWidth = displayMetrics.widthPixels;
+        int screenHeight = displayMetrics.heightPixels;
+        float scaleX = (float) screenWidth / rotated.getWidth();
+        float scaleY = (float) screenHeight / rotated.getHeight();
+        Log.e("TEST","Screen height = " + screenHeight + "width = " + screenWidth);
+        Log.e("TEST","rotated width = " + rotated.getWidth() + "height = " + rotated.getHeight());
+        float scale = Math.min(scaleX, scaleY);
+        Matrix matrix = new Matrix();
+        matrix.setScale(scale, scale);
+        //Bitmap resizedBitmap = Bitmap.createBitmap(
+                //rotated, 0, 0, rotated.getWidth(), rotated.getHeight(), matrix, true);
+        Bitmap resizedBitmap = Bitmap.createScaledBitmap(rotated, screenWidth, screenHeight, true);
+        Log.e("TEST","resized width = " + resizedBitmap.getWidth() + "height = " + resizedBitmap.getHeight());
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        //options.inSampleSize = 4;
+        //grayView.setScaleType(ImageView.ScaleType.FIT_XY);
+        grayView.setImageBitmap(resizedBitmap);
+        Log.e("TEST","grayPreivew height = " + grayView.getHeight() + "width = " + grayView.getWidth());
     }
 
     private Bitmap toGray(Bitmap bitmap){
@@ -570,9 +588,9 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         byte[]in = bitmapToByteArray(bitmap);
         //Log.e("TEST","bitmap height = " + bitmap.getHeight());
         //Log.e("TEST","bitmap width = " + bitmap.getWidth());
-        Log.e("TEST","bitmap size = " + (bitmap.getHeight() * bitmap.getWidth()));
+        //Log.e("TEST","bitmap size = " + (bitmap.getHeight() * bitmap.getWidth()));
 
-        Log.e("TEST","byte[]in length = " + in.length);
+        //Log.e("TEST","byte[]in length = " + in.length);
 //        int length = in.length;
 //        for(int i = 0; i < length; i++){
 //            out[i] = in[i];
@@ -583,25 +601,38 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         int height = bitmap.getHeight();
         if(out == null)
         {
-            out = new byte[width * height];
+            //out = new byte[width * height;
+            out = new byte[width * height * 4];
         }
+        //Log.e("TEST","bitmap height = " + (bitmap.getHeight() + "* bitmap width = " + bitmap.getWidth()));
         if(outBitmap == null)
         {
-            outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8);
+            //outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8); // 문제점: 회색이 아닌 색깔있는 프리뷰에 회색을 덧씌운것처럼 나옴.
+            //비트맵을 카피시켜보는 방법을 찾아볼것
+            outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         }
         //Log.e("TEST","width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
         ConvertRGBtoGray_withoutCV(in, out, width, height);
 
+//        int quarter = out.length / 4;
+//        ByteBuffer buffer = ByteBuffer.wrap(out,0,quarter);
         ByteBuffer buffer = ByteBuffer.wrap(out);
         outBitmap.copyPixelsFromBuffer(buffer);
-
+        //Bitmap CopiedBitmap = outBitmap.copy(outBitmap.getConfig(),true);
+        //Log.e("TEST","width = " + previewView.getMeasuredWidth() + "height = " + previewView.getMeasuredHeight());
+//        DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+//        int screenWidth = displayMetrics.widthPixels;
+//        int screenHeight = displayMetrics.heightPixels;
+        //Bitmap resizedBitmap = Bitmap.createScaledBitmap(outBitmap, screenWidth, screenHeight, true);
+        //Log.e("TEST","Resized bitmap height = " + resizedBitmap.getHeight() + "width = " + resizedBitmap.getWidth());
+//        Log.e("TEST","Screen height = " + screenHeight + "width = " + screenWidth);
         return outBitmap; // 비트맵 리턴
+        //return resizedBitmap;
     }
     public byte[] bitmapToByteArray(Bitmap bitmap) {
         //int bytes = bitmap.getRowBytes() * bitmap.getHeight();
         int bytes = bitmap.getByteCount();
-        Log.e("TEST","Bitmap byte count = " + bytes);
-
+        //Log.e("TEST","Bitmap byte count = " + bytes);
         //int bytes = bitmap.getHeight() * bitmap.getWidth();
         ByteBuffer buffer = ByteBuffer.allocate(bytes);
         //buffer.rewind();
@@ -614,5 +645,3 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         super.onDestroy();
     }
 }
-
-
