@@ -49,13 +49,13 @@ Java_com_example_camerapractice5_MainActivity_ConvertRGBtoGray_1withoutCV(JNIEnv
     Mat matIn(h, w, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr1));
     Mat matOut(h, w, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr2));
 
-    LOGE("matOut 1 %d %d %d %p\n", matOut.rows, matOut.cols, matOut.channels(), matOut.data);
+    //LOGE("matOut 1 %d %d %d %p\n", matOut.rows, matOut.cols, matOut.channels(), matOut.data);
 
     Mat t; //회색 변환때 쓰일 템포러리 Mat
     cvtColor(matIn, t, COLOR_BGRA2GRAY);
     //cvtColor(t,matOut,COLOR_GRAY2BGR); ->회색에서 컬러로 바뀌어도 BGRA 값에는 회색만 담길거니깐
     //다시 matOut에 집어넣어보았지만 그러면 matOut.data로 나오는 주소값이 바뀌어버린다
-    LOGE("t %d %d %d\n", t.rows, t.cols, t.channels());
+    //LOGE("t %d %d %d\n", t.rows, t.cols, t.channels());
 
     //Mat alpha(h, w, CV_8UC1, Scalar(255));
 
@@ -68,7 +68,7 @@ Java_com_example_camerapractice5_MainActivity_ConvertRGBtoGray_1withoutCV(JNIEnv
 
     cv::merge(chan_dst, matOut); // 다시 하나의 채널로 합치기 위해 값이 담긴 배열인 chan_dst의 결과를 matOut에 담는다
 
-    LOGE("matOut 3 %d %d %d %p\n", matOut.rows, matOut.cols, matOut.channels(), matOut.data);
+    //LOGE("matOut 3 %d %d %d %p\n", matOut.rows, matOut.cols, matOut.channels(), matOut.data);
 //    LOGE("matIn  %d x %d x %d, buf_ptr1 %p matIn.data %p\n", matIn.rows, matIn.cols, matIn.channels(), buf_ptr1, matIn.data);
 //    LOGE("matOut %d x %d x %d, buf_ptr2 %p matIn.data %p\n", matOut.rows, matOut.cols, matOut.channels(), buf_ptr2, matOut.data);
     //LOGE("t  %d x %d x %d, t.data %p\n", t.rows, t.cols, t.channels(), t.data);

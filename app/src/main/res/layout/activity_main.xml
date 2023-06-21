@@ -60,14 +60,33 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         app:tint="#fff"
         android:text="방향전환"/>
 
+    <Switch
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/grayButton"
+        android:checked="true"
+        android:switchMinWidth="3dp"
+        android:layout_marginLeft="300dp"
+        android:layout_marginTop="40dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/grayOrColor"
+        android:layout_marginLeft="315dp"
+        android:layout_marginTop="65dp"
+        android:text="흑백모드"
+        android:textColor="@color/white"/>
+
+
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="후레쉬"
         android:id="@+id/flash"
-        android:layout_marginLeft="305dp"
+        android:layout_marginLeft="290dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:layout_marginTop="40dp"/>
+        android:layout_marginTop="80dp"/>
 
 
     <Chronometer

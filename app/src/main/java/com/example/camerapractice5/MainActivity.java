@@ -10,6 +10,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -22,8 +23,15 @@ import android.hardware.camera2.CameraManager;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaActionSound;
+import android.media.MediaCodec;
+import android.media.MediaMetadataRetriever;
+import android.media.MediaCodecInfo;
+import android.media.MediaFormat;
+import android.media.MediaMetadataRetriever;
+import android.media.MediaMuxer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.provider.MediaStore;
@@ -35,6 +43,9 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.CompoundButton;
+import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ImageView;
 import android.widget.Chronometer;
@@ -56,10 +67,12 @@ import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.DisplayOrientedMeteringPointFactory;
 import androidx.camera.core.MeteringPointFactory;
 import androidx.camera.core.Preview;
+import androidx.camera.core.impl.utils.executor.CameraXExecutors;
 import androidx.camera.core.resolutionselector.AspectRatioStrategy;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.video.MediaStoreOutputOptions;
+import androidx.camera.video.PendingRecording;
 import androidx.camera.video.Quality;
 import androidx.camera.video.QualitySelector;
 import androidx.camera.video.Recorder;
@@ -72,9 +85,9 @@ import androidx.core.content.ContextCompat;
 import androidx.core.util.Consumer;
 
 import static android.Manifest.permission.CAMERA;
+import static com.example.camerapractice5.ImageUtil.rotateBitmap;
 
 import com.bumptech.glide.Glide;
-
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
@@ -83,18 +96,46 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.android.OpenCVLoader;
+//import org.bytedeco.javacv.FFmpegFrameRecorder;
+//import org.bytedeco.javacv.AndroidFrameConverter;
+//import org.bytedeco.javacv.Frame;
+//import org.bytedeco.javacv.Frame;
+//import org.bytedeco.javacv.FrameRecorder;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfByte;
+import org.opencv.core.MatOfInt;
+import org.opencv.core.MatOfInt4;
+import org.opencv.core.Size;
+import org.opencv.videoio.VideoWriter;
+import org.opencv.videoio.Videoio;
+
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+
+import io.reactivex.Completable;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.schedulers.Schedulers;
 
 import com.example.camerapractice5.databinding.ActivityMainBinding;
 
@@ -124,7 +165,10 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     MediaActionSound sound = new MediaActionSound();
     VideoCapture<Recorder> videoCapture = null;
     Button record, picture, flipCamera, flash;
+    Switch grayButton;
+    TextView grayOrColor;
     boolean flashOn = false;
+    boolean isGrayRecording = false;
     static PreviewView previewView;
     //    ImageView previewView;
     ImageView grayView;
@@ -135,6 +179,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     ImageCapture imageCapture;
     ImageAnalysis imageAnalysis;
     ProcessCameraProvider processCameraProvider;
+    VideoWriter videoWriter;
     int cameraFacing = CameraSelector.LENS_FACING_BACK;
     CameraManager cameraManager;
     String getCameraID;
@@ -195,6 +240,8 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         chronometer.setVisibility(View.INVISIBLE);
         zoombar = findViewById(R.id.zoombar);
         flash = findViewById(R.id.flash);
+        grayButton = findViewById(R.id.grayButton);
+        grayOrColor = findViewById(R.id.grayOrColor);
 
         zoombar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -208,6 +255,23 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        grayButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
+            @Override
+            public void onCheckedChanged(CompoundButton button, boolean isChecked){
+                if(isChecked){
+                    grayView.setVisibility(View.VISIBLE);
+                    grayOrColor.setText("흑백 ON");
+                    processCameraProvider.unbindAll();
+                    bind();
+                }else{
+                    grayView.setVisibility(View.INVISIBLE);
+                    grayOrColor.setText("흑백 OFF");
+                    processCameraProvider.unbindAll();
+                    bind();
+                }
             }
         });
 
@@ -229,20 +293,15 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
         // Get the WindowManager service
         WindowManager windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
-
         DisplayMetrics displayMetrics = new DisplayMetrics();
-
         Display display = windowManager.getDefaultDisplay();
-
         display.getMetrics(displayMetrics);
-
 
         int maxX = displayMetrics.widthPixels;
         //Log.e("TEST", "Max X = " + maxX);
         int maxY = displayMetrics.heightPixels;
         //Log.e("TEST", "Max Y = " + maxY);
         //Log.e("TEST", "Ratio = " + ((float) maxY / (float) maxX));
-
 
         previewView.setOnTouchListener(new View.OnTouchListener() {
             @SuppressLint("RestrictedApi")
@@ -396,16 +455,24 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                                 @SuppressLint({"UnsafeExperimentalUsageError", "UnsafeOptInUsageError"})
                                 Image mediaImage = image.getImage();
                                 Bitmap bitmap = ImageUtil.mediaImageToBitmap(mediaImage);
-                                float rotationDegrees = image.getImageInfo().getRotationDegrees();
-                                Bitmap rotatedBitmap = ImageUtil.rotateBitmap(bitmap, rotationDegrees);
-                                imageView.setImageBitmap(rotatedBitmap);
-                                saveImage(rotatedBitmap);
+
+                                if(grayButton.isChecked()){
+                                    Bitmap grayBitmap =toGray(bitmap);
+                                    float rotationDegrees = image.getImageInfo().getRotationDegrees();
+                                    Bitmap rotatedBitmap = rotateBitmap(grayBitmap, rotationDegrees);
+                                    imageView.setImageBitmap(rotatedBitmap);
+                                    saveImage(rotatedBitmap);
+                                }else{
+                                    float rotationDegrees = image.getImageInfo().getRotationDegrees();
+                                    Bitmap rotatedBitmap = rotateBitmap(bitmap, rotationDegrees);
+                                    imageView.setImageBitmap(rotatedBitmap);
+                                    saveImage(rotatedBitmap);
+                                }
+
                             }
                         }
                 );
             }
-
-
         });
 
         record.setOnClickListener(new View.OnClickListener() {
@@ -417,11 +484,38 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                     //} else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                     //    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
                 } else {
-                    MainActivity.this.captureVideo(); // 모든 권한이 있다면 녹화하는 함수 호출
+//                    if(grayButton.isChecked()){
+//                        if (isGrayRecording) {
+//                            isGrayRecording = false;
+//                            if (videoWriter != null) {
+//                                Log.e("TEST","VideoWriter not null");
+//                                videoWriter.release();
+//                                Log.e("TEST","Gray Video Recording ended");
+//;                                videoWriter = null;
+//
+//                                chronometer.setBase(SystemClock.elapsedRealtime());
+//                                chronometer.stop();
+//                                chronometer.setVisibility(View.INVISIBLE);
+//                                running = false;
+//                            }
+//                        } else {
+//                            if (!running) {
+//                                chronometer.setVisibility(View.VISIBLE);
+//                                chronometer.setBase(SystemClock.elapsedRealtime());
+//                                chronometer.start();
+//                                running = true;
+//                            }
+//                            isGrayRecording = true;
+//                            Log.e("TEST","VideoWriter null");
+//                            MainActivity.this.captureGrayVideo();
+//                        }
+//                    }
+//                    else{
+                        MainActivity.this.captureVideo();
+                    //}
                 }
             }
         });
-
     }
 
     private final ActivityResultLauncher<String> activityResultLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), result -> {
@@ -431,7 +525,6 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
             bind();
         }
     });
-
 
     public void saveImage(Bitmap rotatedBitmap) {
         Uri images;
@@ -444,76 +537,132 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         contentValues.put(MediaStore.Images.Media.MIME_TYPE, "images/");
         contentValues.put(MediaStore.Video.Media.RELATIVE_PATH, "Pictures/CameraX-Images");
         Uri uri = contentResolver.insert(images, contentValues);
-
+        Bitmap bitmap = Bitmap.createBitmap(rotatedBitmap);
         try {
             OutputStream outputStream = contentResolver.openOutputStream(Objects.requireNonNull(uri));
-            mat = new Mat();
-            Bitmap gray_bitmap = Bitmap.createBitmap(rotatedBitmap);
-
-            Utils.bitmapToMat(gray_bitmap, mat);
-            Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGB2GRAY);
-            Utils.matToBitmap(mat, gray_bitmap);
-
-            gray_bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
+            rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
             String msg = "촬영 완료: " + images;
             Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
-
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public void captureVideo() {
-        Log.e("TEST", "Capture Video Button Clicked");
         Recording recording1 = recording;
+        Log.e("TEST","Test if null");
         if (recording1 != null) {
-            Log.e("TEST", "recording1 not null");
             recording1.stop();
             recording = null;
+            Log.e("TEST","Recording not null");
             return;
         }
 
+        Log.e("TEST","Recording null");
         String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
-        Log.e("TEST", "Check time");
         ContentValues contentValues = new ContentValues();
         contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, time);
         contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4");
         contentValues.put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/CameraX-Video");
 
         MediaStoreOutputOptions options = new MediaStoreOutputOptions.Builder(getContentResolver(), MediaStore.Video.Media.EXTERNAL_CONTENT_URI).setContentValues(contentValues).build();
-        Log.e("TEST", "Media Store");
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
 
+        Recorder recorder = videoCapture.getOutput();
+        PendingRecording pendingRecording = recorder.prepareRecording(MainActivity.this, options)
+                .withAudioEnabled();
+        recording = pendingRecording.start(ContextCompat.getMainExecutor(MainActivity.this), new Consumer<VideoRecordEvent>() {
 
-        recording = videoCapture.getOutput().prepareRecording(MainActivity.this, options).withAudioEnabled().start(ContextCompat.getMainExecutor(MainActivity.this), new Consumer<VideoRecordEvent>() {
             @Override
             public void accept(VideoRecordEvent videoRecordEvent) {
-                Log.e("TEST", "video accepted " + videoRecordEvent);
-                //recording 계속 실행 (accept 함수로 인해 Finalize 될때까지 돌아감)
-                if (videoRecordEvent instanceof VideoRecordEvent.Start) { // 녹화 시작
+                //Log.e("TEST", "video accepted " + videoRecordEvent);
+                if (videoRecordEvent instanceof VideoRecordEvent.Start) {
                     record.setEnabled(true); // record 시작
-                    Log.e("TEST", "On Progress");
+                    //Log.e("TEST", "On Progress");
                     //sound.play(MediaActionSound.START_VIDEO_RECORDING);
 
-                    if (!running) { // 디폴트: false
+                    if (!running) {
                         chronometer.setVisibility(View.VISIBLE);
-                        chronometer.setBase(SystemClock.elapsedRealtime()); // 현재시간과 마지막으로 클릭된 시간 차이 (한번 눌렀으니 0)
-                        chronometer.start(); // 타이머 시작
+                        chronometer.setBase(SystemClock.elapsedRealtime());
+                        chronometer.start();
                         running = true;
-                        Log.e("TEST", "Chronometer started");
                     }
 
-                } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) { // 녹화 끝나서
-                    if (!((VideoRecordEvent.Finalize) videoRecordEvent).hasError()) { // 에러가 없다면
+                } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
+                    if (!((VideoRecordEvent.Finalize) videoRecordEvent).hasError()) {
+                        Log.e("TEST","Video finalized");
                         //sound.play(MediaActionSound.STOP_VIDEO_RECORDING);
                         chronometer.setBase(SystemClock.elapsedRealtime());
                         chronometer.stop();
                         chronometer.setVisibility(View.INVISIBLE);
-                        Log.e("TEST", "Chronometer stopped");
+                        //Log.e("TEST", "Chronometer stopped");
+
+//                        Bitmap videoBitmap = getVideoFrame(((VideoRecordEvent.Finalize) videoRecordEvent).getOutputResults().getOutputUri(), SystemClock.elapsedRealtime());
+//                        Bitmap grayBitmap = toGray(videoBitmap);
+//                        Uri videoUri = ((VideoRecordEvent.Finalize) videoRecordEvent).getOutputResults().getOutputUri();
+//                        List<Bitmap> frameList = null;
+//                        try {
+//                            frameList = extractFramesFromVideo(videoUri);
+//                        } catch (IOException e) {
+//                            throw new RuntimeException(e);
+//                        }
+//                        List<Bitmap> grayFrameList = new ArrayList<>();
+//                        for (Bitmap frame : frameList) {
+//                            Bitmap grayFrame = toGray(frame);
+//                            grayFrameList.add(grayFrame);
+//                        }
+//                        //그레이프레임리스트에 회색 비트맵은 들어가있는 상황. 이제 이 비트맵을 비디오프레임에 넣어보자
+//                        Uri grayVideoUri = createGrayVideoFile();
+//                        try {
+//                            encodeFramesToVideo(grayFrameList, grayVideoUri);
+//                        } catch (Exception e) {
+//                            throw new RuntimeException(e);
+//                        }
+                        //cleanup();
+
                         running = false;
+//                        if(grayButton.isChecked()) {
+//                            Log.e("TEST","grayButton checked finalize");
+//                            //String savedVideoPath = options.getContentValues().getAsString(MediaStore.MediaColumns.DATA);
+//                            String s = MediaStore.Video.Media.EXTERNAL_CONTENT_URI.getPath();
+//                            Log.e("TEST","Video Path = " + s);
+//                            String savedVideoPath = MediaStore.Video.Media.EXTERNAL_CONTENT_URI.toString() + "/" + options.getContentValues().getAsInteger(MediaStore.MediaColumns._ID);
+//                            Log.e("TEST","savedVideoPath = " + savedVideoPath);
+//                            String outputVideoPath = savedVideoPath.replace(".mp4", "_gray.mp4");
+//                            Uri savedVideoUri = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues);
+//                            String savedVideoPath = savedVideoUri.toString();
+//                            String outputVideoPath = savedVideoPath.replace(".mp4", "_gray.mp4");
+//
+//                            String[] projection = {MediaStore.MediaColumns.DATA};
+//                            Cursor cursor = getContentResolver().query(savedVideoUri, projection, null, null, null);
+//                            if (cursor != null && cursor.moveToFirst()) {
+//                                int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA);
+//                                String savedVideoPath = cursor.getString(columnIndex);
+//                                String outputVideoPath = savedVideoPath.replace(".mp4", "_gray.mp4");
+//                                cursor.close();
+//                                // Use the obtained savedVideoPath as inputVideoPath in convertToGrayscale() method
+//                                try {
+//                                    convertToGrayscale(fileAddress, outputVideoPath);
+//                                } catch (IOException e) {
+//                                    throw new RuntimeException(e);
+//                                }
+//                            }
+//
+//                            try {
+//                                Log.e("TEST","Going to convertToGrayscale");
+//                                convertToGrayscale(savedVideoPath, outputVideoPath);
+//                            } catch (IOException e) {
+//                                throw new RuntimeException(e);
+//                            }
+//                        }else{
+//                            Log.e("TEST","savedVideoPath = " + MediaStore.Video.Media.EXTERNAL_CONTENT_URI.buildUpon()
+//                                    .appendPath(time + ".mp4")
+//                                    .build().toString());
+//                        }
+
                         String msg = "녹화 완료: " + ((VideoRecordEvent.Finalize) videoRecordEvent).getOutputResults().getOutputUri(); // 메세지: 녹화분 정보
                         Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show(); // 메세지와 함께 토스트 띄우기
                     } else {
@@ -527,20 +676,262 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         });
     }
 
-    void bind() {
-        //previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);
-        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing)
-                .build();
-        Preview preview = new Preview.Builder()
-                .build();
-        preview.setSurfaceProvider(previewView.getSurfaceProvider());
-        imageCapture = new ImageCapture.Builder()
-                .build();
-        Recorder recorder = new Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
-                .build();
-        videoCapture = VideoCapture.withOutput(recorder);
+//    private void convertToGrayscale(String inputVideoPath, String outputGrayVideoPath) throws IOException {
+//        Log.e("TEST","convertToGrayScale Arrived");
+//        // Load the input video
+//        try {
+//            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+//            Log.e("TEST","MediaMetaDataRetreiver made");
+//            retriever.setDataSource(inputVideoPath);
+//            Log.e("TEST","inputVideoPath check");
+//
+//            // Get the properties of the input video
+//            String frameWidthStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH);
+//            String frameHeightStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
+//            String frameRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE);
+//            Log.e("TEST","get properties");
+//
+//            double frameWidth = Double.parseDouble(frameWidthStr);
+//            double frameHeight = Double.parseDouble(frameHeightStr);
+//            double frameRate = Double.parseDouble(frameRateStr);
+//
+//            VideoWriter videoWriter = new VideoWriter(outputGrayVideoPath, VideoWriter.fourcc('X', 'V', 'I', 'D'), frameRate, new Size(frameWidth, frameHeight), true);
+//            Log.e("TEST","Create VideoWriter");
+//
+//            for (int frameIndex = 0; ; frameIndex++) {
+//                Bitmap frameBitmap = retriever.getFrameAtTime(frameIndex * 1000000L / (long) frameRate, MediaMetadataRetriever.OPTION_CLOSEST); // 각 프레임 받아오기
+//                if (frameBitmap == null) {
+//                    break;
+//                }
+//                // 받은 프레임 회색으로 바꾸기
+//                Bitmap grayBitmap = toGray(frameBitmap);
+//                // 회색 비트맵 -> byteArray
+//                byte[] grayByteArray = bitmapToByteArray(grayBitmap);
+//                // byteArray -> 프레임 -> 비디오
+//                videoWriter.write(new MatOfByte(grayByteArray));
+//                Log.e("TEST","VideoWriter pass");
+//            }
+//
+//            videoWriter.release();
+//            retriever.release();
+//        }catch (RuntimeException e) {
+//            e.printStackTrace();
+//            Log.e("TEST","Exception catch");
+//        }
+//    }
 
+
+//    private Mat toGray(Mat frame) {
+//        Mat grayFrame = new Mat();
+//        Imgproc.cvtColor(frame, grayFrame, Imgproc.COLOR_BGR2GRAY);
+//        return grayFrame;
+//    }
+
+
+
+//    private List<Bitmap> extractFramesFromVideo(Uri videoUri) throws IOException {
+//        List<Bitmap> frameList = new ArrayList<>();
+//
+//        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+//        try {
+//            retriever.setDataSource(this, videoUri);
+//            String durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+//            long durationUs = Long.parseLong(durationStr) * 1000;
+//            long frameIntervalUs = 1000000;
+//            for (long timeUs = 0; timeUs < durationUs; timeUs += frameIntervalUs) {
+//                Bitmap frame = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+//                if (frame != null) {
+//                    frameList.add(frame);
+//                }
+//            }
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        } finally {
+//            retriever.release();
+//        }
+//        return frameList;
+//    }
+
+//    private Uri createGrayVideoFile() {
+//        File outputDir = getApplicationContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+//        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+//        String fileName = "gray_video_" + timeStamp + ".mp4";
+//        File outputFile = new File(outputDir, fileName);
+//
+//        // Return the Uri representing the file location
+//        return Uri.fromFile(outputFile);
+//    }
+
+//    private void encodeFramesToVideo(List<Bitmap>frameList, File outpurFile){
+//        MediaCodec encoder = null;
+//        MediaMuxer muxer = null;
+//
+//    }
+
+//    private void encodeFramesToVideo(List<Bitmap> frameList, File outputFile) {
+//        try {
+//            MediaCodecInfo codecInfo = selectVideoCodec("video/avc");
+//            int width = frameList.get(0).getWidth();
+//            int height = frameList.get(0).getHeight();
+//
+//            MediaCodec mediaCodec = MediaCodec.createEncoderByType("video/avc");
+//            MediaFormat format = MediaFormat.createVideoFormat("video/avc", width, height);
+//            format.setInteger(MediaFormat.KEY_BIT_RATE, 2000000);
+//            format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
+//            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+//            format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+//            format.setInteger(MediaFormat.KEY_CAPTURE_RATE, 30);
+//
+//            mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+//            Surface surface = mediaCodec.createInputSurface();
+//            mediaCodec.start();
+//
+//            MediaMuxer mediaMuxer = new MediaMuxer(outputFile.getAbsolutePath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+//            int trackIndex = mediaMuxer.addTrack(format);
+//            mediaMuxer.start();
+//
+//            for (Bitmap frame : frameList) {
+//                Bitmap rotatedFrame = rotateBitmap(frame, rotation);
+//                ByteBuffer inputBuffer = getInputBuffer(mediaCodec);
+//                byte[] frameData = getBitmapData(rotatedFrame);
+//                inputBuffer.clear();
+//                inputBuffer.put(frameData);
+//                mediaCodec.queueInputBuffer(index, 0, frameData.length, presentationTimeUs, 0);
+//                presentationTimeUs += 1000000 / 30;
+//            }
+//
+//            // Signal end of input
+//            mediaCodec.queueInputBuffer(index, 0, 0, presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+//
+//            // Drain output buffers
+//            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+//            int outputBufferIndex;
+//            ByteBuffer outputBuffer;
+//
+//            while (true) {
+//                outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
+//                if (outputBufferIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
+//                    break;
+//                } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+//                    MediaFormat newFormat = mediaCodec.getOutputFormat();
+//                    trackIndex = mediaMuxer.addTrack(newFormat);
+//                    mediaMuxer.start();
+//                } else if (outputBufferIndex >= 0) {
+//                    outputBuffer = getOutputBuffer(mediaCodec, outputBufferIndex);
+//                    mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo);
+//                    mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
+//                    if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+//                        break;
+//                    }
+//                }
+//            }
+//
+//            mediaCodec.stop();
+//            mediaCodec.release();
+//            mediaMuxer.stop();
+//            mediaMuxer.release();
+//
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//    }
+
+
+
+//    private void encodeFramesToVideo(List<Bitmap> frameList, Uri outputFileUri) throws FrameRecorder.Exception {
+//        DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+//        int width = displayMetrics.widthPixels;
+//        int height = displayMetrics.heightPixels;
+//
+//        FFmpegFrameRecorder videoEncoder = new FFmpegFrameRecorder(outputFileUri.getPath(), width, height);
+//        videoEncoder.setVideoCodec(avcodec.AV_CODEC_ID_H264);
+//        videoEncoder.setFrameRate(30); // Set frame rate if desired
+//        videoEncoder.setPixelFormat(avutil.AV_PIX_FMT_YUV420P); // Set pixel format
+//
+//        try {
+//            videoEncoder.start();
+//
+//            for (Bitmap frame : frameList) {
+//                Frame videoFrame = convertBitmapToFrame(frame);
+//                videoEncoder.record(videoFrame);
+//            }
+//
+//            videoEncoder.stop();
+//        } catch (FrameRecorder.Exception e) {
+//            e.printStackTrace();
+//        } finally {
+//            videoEncoder.release();
+//        }
+//    }
+//
+//    private Frame convertBitmapToFrame(Bitmap bitmap) {
+//        Frame frame = new Frame(bitmap.getWidth(), bitmap.getHeight(), Frame.DEPTH_UBYTE, 4);
+//        ByteBuffer buffer = ByteBuffer.allocate(bitmap.getByteCount());
+//        bitmap.copyPixelsToBuffer(buffer);
+//        buffer.rewind();
+//        frame.image[0] = buffer;
+//        return frame;
+//    }
+
+//    public static Bitmap getVideoFrame(Uri uri, long frameTime){
+//        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+//        try {
+//            retriever.setDataSource(String.valueOf(uri));
+//            return retriever.getFrameAtTime(frameTime, MediaMetadataRetriever.OPTION_CLOSEST);
+//        } catch (IllegalArgumentException ex) {
+//            ex.printStackTrace();
+//        }
+//        return null;
+//    }
+
+//    private void processFrame(Bitmap frame) {
+//        Bitmap grayFrame = toGray(frame);
+//        saveGrayscaleFrame(frame);
+//    }
+
+//    public void captureGrayVideo(){
+//        Log.e("TEST","CaptureGrayVideo arrived");
+//        processCameraProvider.unbindAll();
+//        Log.e("TEST","Going to bindVideo");
+//        bindVideo();
+//    }
+
+    public void saveGrayVideo(Bitmap grayFrame, int rotation, double frameWidth, double frameHeight) throws IllegalAccessException, NoSuchFieldException {
+        if (videoWriter == null) {
+            Log.e("TEST", "Save Video");
+            double frameRate = 30;
+            Log.e("TEST", "Get frames");
+            String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
+            String fileName = time + ".mp4";
+            int fourcc = VideoWriter.fourcc('M', 'P', '4', 'V');
+            Log.e("TEST","Create videoWriter");
+
+//            System.setProperty("java.library.path", "C:\\pathToFolderContainingDLL");
+//            Field fieldSysPath = ClassLoader.class.getDeclaredField("sys_paths");
+//            fieldSysPath.setAccessible(true);
+//            fieldSysPath.set(null, null);
+
+            //System.loadLibrary("opencv_ffmpeg343_64");
+
+            videoWriter = new VideoWriter(fileName, fourcc, frameRate, new Size(frameWidth, frameHeight), false);
+        }else {
+            Log.e("TEST","videoWriter not null");
+            Bitmap rotated = rotateBitmap(grayFrame, rotation);
+            Log.e("TEST", "Set videoWriter");
+            byte[] grayByteArray2 = bitmapToByteArray(rotated);
+            Log.e("TEST", "Gray bitmap to byteArray");
+            videoWriter.write(new MatOfByte(grayByteArray2));
+            Log.e("TEST", "videoWrite matOfByte");
+        }
+    }
+
+    void bind() {
+        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
+        Preview preview = new Preview.Builder().build();
+        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+        imageCapture = new ImageCapture.Builder().build();
+        Recorder recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build();
+        videoCapture = VideoCapture.withOutput(recorder);
         ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
         selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
         imageAnalysis = new ImageAnalysis.Builder()
@@ -548,36 +939,101 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                 .setResolutionSelector(selectorBuilder.build())
                 .build();
         imageAnalysis.setAnalyzer(getMainExecutor(), this);
-        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture, imageAnalysis); // 바인딩에 ImageAnalysis 포함시키기
+
+//        if (grayButton.isChecked()) {
+//            ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
+//            selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
+//            imageAnalysis = new ImageAnalysis.Builder()
+//                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+//                    .setResolutionSelector(selectorBuilder.build())
+//                    .build();
+//            imageAnalysis.setAnalyzer(getMainExecutor(), new ImageAnalysis.Analyzer() {
+//                @Override
+//                public void analyze(@NonNull ImageProxy image) {
+//                    Bitmap bitmap = image.toBitmap();
+//                    image.close();
+//                    Bitmap grayFrame = toGray(bitmap);
+//                    processFrame(grayFrame);
+//                }
+//            });
+            camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture, imageAnalysis);
+
     }
+
+
+//    void bindVideo() {
+//        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
+////        Preview preview = new Preview.Builder().build();
+////        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+////        imageCapture = new ImageCapture.Builder().build();
+//        Recorder recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build();
+//        videoCapture = VideoCapture.withOutput(recorder);
+//
+////            ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
+////            selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
+//            imageAnalysis = new ImageAnalysis.Builder()
+//                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+//                    //.setResolutionSelector(selectorBuilder.build())
+//                    .build();
+//            imageAnalysis.setAnalyzer(getMainExecutor(), new ImageAnalysis.Analyzer() {
+//                @Override
+//                public void analyze(@NonNull ImageProxy image) {
+//                    Log.e("TEST","Analyze Video");
+//                    Bitmap bitmap = image.toBitmap();
+//                    image.close();
+//                    Log.e("TEST","Bitmap width = " + bitmap.getWidth() + "bitmap height = " + bitmap.getHeight());
+//                    Bitmap grayFrame = toGray(bitmap);
+//                    //processFrame(grayFrame);
+//                    //saveGrayscaleFrame(grayFrame);
+//                    double frameWidth = image.getWidth();
+//                    double frameHeight = image.getHeight();
+//                    rotation = image.getImageInfo().getRotationDegrees();
+//                    if(isGrayRecording) {
+//                        try {
+//                            saveGrayVideo(grayFrame, rotation, frameWidth, frameHeight);
+//                        } catch (IllegalAccessException e) {
+//                            throw new RuntimeException(e);
+//                        } catch (NoSuchFieldException e) {
+//                            throw new RuntimeException(e);
+//                        }
+//                    }
+//                    //byte[]grayByteArray2 = bitmapToByteArray(rotated);
+//                    //videoWriter.write(new MatOfByte(grayByteArray2));
+//                }
+//            });
+//            camera = processCameraProvider.bindToLifecycle(this, cameraSelector, videoCapture, imageAnalysis);
+//    }
+
 
     @Override
     public void analyze(@NonNull ImageProxy image) {
         Bitmap bitmap = image.toBitmap();
+        //Log.e("TEST","Bitmap height = " + bitmap.getHeight() + "width = " + bitmap.getWidth());
         image.close();
         Bitmap gray = toGray(bitmap);
         rotation = image.getImageInfo().getRotationDegrees();
         //Log.e("TEST", "rotation "+rotation);
-        Bitmap rotated = ImageUtil.rotateBitmap(gray, rotation);
+        Bitmap rotated = rotateBitmap(gray, rotation);
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
         int screenWidth = displayMetrics.widthPixels;
         int screenHeight = displayMetrics.heightPixels;
         float scaleX = (float) screenWidth / rotated.getWidth();
         float scaleY = (float) screenHeight / rotated.getHeight();
-        Log.e("TEST","Screen height = " + screenHeight + "width = " + screenWidth);
-        Log.e("TEST","rotated width = " + rotated.getWidth() + "height = " + rotated.getHeight());
+        //Log.e("TEST","Screen height = " + screenHeight + "width = " + screenWidth);
+        //Log.e("TEST","rotated width = " + rotated.getWidth() + "height = " + rotated.getHeight());
         float scale = Math.min(scaleX, scaleY);
         Matrix matrix = new Matrix();
         matrix.setScale(scale, scale);
         //Bitmap resizedBitmap = Bitmap.createBitmap(
                 //rotated, 0, 0, rotated.getWidth(), rotated.getHeight(), matrix, true);
         Bitmap resizedBitmap = Bitmap.createScaledBitmap(rotated, screenWidth, screenHeight, true);
-        Log.e("TEST","resized width = " + resizedBitmap.getWidth() + "height = " + resizedBitmap.getHeight());
+        //Log.e("TEST","resized width = " + resizedBitmap.getWidth() + "height = " + resizedBitmap.getHeight());
         BitmapFactory.Options options = new BitmapFactory.Options();
         //options.inSampleSize = 4;
         //grayView.setScaleType(ImageView.ScaleType.FIT_XY);
         grayView.setImageBitmap(resizedBitmap);
-        Log.e("TEST","grayPreivew height = " + grayView.getHeight() + "width = " + grayView.getWidth());
+        //Log.e("TEST","grayPreivew height = " + grayView.getHeight() + "width = " + grayView.getWidth());
+        //processFrame(bitmap);
     }
 
     private Bitmap toGray(Bitmap bitmap){
@@ -599,18 +1055,20 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
-        if(out == null)
-        {
-            //out = new byte[width * height;
-            out = new byte[width * height * 4];
-        }
-        //Log.e("TEST","bitmap height = " + (bitmap.getHeight() + "* bitmap width = " + bitmap.getWidth()));
-        if(outBitmap == null)
-        {
-            //outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8); // 문제점: 회색이 아닌 색깔있는 프리뷰에 회색을 덧씌운것처럼 나옴.
-            //비트맵을 카피시켜보는 방법을 찾아볼것
-            outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        }
+        out = new byte[width * height * 4];
+        outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+//        if(out == null)
+//        {
+//            //out = new byte[width * height;
+//            out = new byte[width * height * 4];
+//        }
+//        //Log.e("TEST","bitmap height = " + (bitmap.getHeight() + "* bitmap width = " + bitmap.getWidth()));
+//        if(outBitmap == null)
+//        {
+//            //outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8); // 문제점: 회색이 아닌 색깔있는 프리뷰에 회색을 덧씌운것처럼 나옴.
+//            //비트맵을 카피시켜보는 방법을 찾아볼것
+//            outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+//        }
         //Log.e("TEST","width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
         ConvertRGBtoGray_withoutCV(in, out, width, height);
 
@@ -639,6 +1097,35 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         bitmap.copyPixelsToBuffer(buffer);
         return buffer.array();
     }
+
+//    private final ImageAnalysis.Analyzer videoFrameAnalyzer = new ImageAnalysis.Analyzer() {
+//        @Override
+//        public void analyze(@NonNull ImageProxy image) {
+//
+//            // Get the properties of the input video
+//            //String frameWidthStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH);
+//            //String frameHeightStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
+//            //String frameRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE);
+//            Log.e("TEST","get properties");
+//
+//            double frameWidth = image.getWidth();
+//            double frameHeight = image.getHeight();
+//            double frameRate = 30;
+//            Log.e("TEST","Get frames");
+//            String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
+//            String fileName = time + ".mp4";
+//            VideoWriter videoWriter = new VideoWriter(fileName, VideoWriter.fourcc('X', 'V', 'I', 'D'), frameRate, new Size(frameWidth, frameHeight), false);
+//            Log.e("TEST","videoWriter");
+//            Bitmap bitmap = image.toBitmap();
+//            //Log.e("TEST","Bitmap height = " + bitmap.getHeight() + "width = " + bitmap.getWidth());
+//            image.close();
+//            Bitmap gray = toGray(bitmap);
+//            rotation = image.getImageInfo().getRotationDegrees();
+//            Bitmap rotated = rotateBitmap(gray, rotation);
+//            byte[]grayByteArray2 = bitmapToByteArray(rotated);
+//            videoWriter.write(new MatOfByte(grayByteArray2));
+//        }
+//    };
 
     @Override
     protected void onDestroy() {
