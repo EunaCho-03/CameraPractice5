@@ -2,7 +2,14 @@
 #include <opencv2/opencv.hpp>
 #include <android/log.h>
 #include <vector>
+//#include <opencv2/imgcodecs.hpp>
+//#include "opencv2/highgui/highgui.hpp"
+//#include "opencv2/highgui/highgui_c.h"
+
+//#include "opencv2/imgproc.hpp"
+
 using namespace cv;
+using namespace std;
 
 #define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR,"TEST",__VA_ARGS__)
 
@@ -23,26 +30,6 @@ Java_com_example_camerapractice5_MainActivity_ConvertRGBtoGray_1withoutCV(JNIEnv
                                                                           jbyteArray in, jbyteArray out, jint w,
                                                                           jint h) {
 //    // TODO: implement ConvertRGBtoGray_withoutCV()
-//    //Mat (int rows, int cols, int type, void *data, size_t step=AUTO_STEP)
-//    //int len = env->GetArrayLength(in);
-//    unsigned char* buf_ptr1 = ...;
-//    //unsigned char* buf_ptr1 = (unsigned char*)malloc(sizeof(in));
-//    //buf_ptr1 = (unsigned char*) &in[0];
-//    unsigned char *buf_ptr2 = (unsigned char*)malloc(sizeof(out));
-//    Mat mat_in(h, w, CV_8UC3, *buf_ptr1);
-//    Mat mat_out(h, w, CV_8UC3, *buf_ptr2);
-//    cvtColor(mat_in, mat_out, COLOR_RGBA2GRAY);
-////    for(int i = 0; i < h * w; i++){
-////        out[i] = mat_out.data[i];
-////    }
-//    std::memcpy(buf_ptr2,buf_ptr1,sizeof(in));
-//    free(buf_ptr1);
-//    free(buf_ptr2);
-
-//    int sz1 = env->GetArrayLength(in);
-//    int sz2 = env->GetArrayLength(out);
-    //LOGE("sz1 %d sz2 %d\n", sz1, sz2);
-
     jbyte* buf_ptr1 = env->GetByteArrayElements(in, nullptr);
     jbyte* buf_ptr2 = env->GetByteArrayElements(out, nullptr);
 
@@ -75,4 +62,125 @@ Java_com_example_camerapractice5_MainActivity_ConvertRGBtoGray_1withoutCV(JNIEnv
 
     env->ReleaseByteArrayElements(in, buf_ptr1, 0);
     env->ReleaseByteArrayElements(out, buf_ptr2, 0);
+}
+
+
+//extern "C"
+//JNIEXPORT void JNICALL
+//Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thiz, jbyteArray in,
+//                                                        jint image_width, jint image_height) {
+    //가져온 byteArray 가리킬 포인터
+//    jbyte* buf_ptr = env->GetByteArrayElements(in, nullptr);
+//    //가져온 이미지 Mat으로
+//    Mat img(image_height, image_width, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr));
+//    LOGE("img  %d x %d x %d, buf_ptr %p img.data %p\n", img.rows, img.cols, img.channels(), buf_ptr, img.data);
+//
+//    Mat img_gray; //Edge detection을 위해 회색으로 변환
+//    cvtColor(img, img_gray, COLOR_BGR2GRAY);
+//    LOGE("img_gray  %d x %d x %d,  img_gray.data %p\n", img_gray.rows, img_gray.cols, img_gray.channels(), img_gray.data);
+//
+//    Mat img_canny; //Canny로 Edge Detection
+//    Canny(img_gray, img_canny, 150, 255);
+//
+//    vector<Vec2f> lines; //Vec2f - 데이터가 2개인 평면
+//    //img_canny에서 HoughLines 함수 통해 직선 검출하고 직선들은 lines라는 배열에 저장
+//    HoughLines(img_canny, lines, 1, CV_PI / 180, 150);
+//
+//    Mat img_hough; //왜 복붙을 하는지 모르겠으나 나중에 이미지를 그릴때 img를 쓰면 안먹힘
+//    img.copyTo(img_hough);
+//
+////    Mat img_lane; // 검은 이미지에 선만 보고 싶을때
+////    threshold(img_canny, img_lane, 150, 255, THRESH_MASK);
+//
+//
+//
+//    for (size_t i = 0; i < lines.size(); i++)
+//    {
+//        float rho = lines[i][0], theta = lines[i][1];
+//        Point pt1, pt2;
+//        double a = cos(theta), b = sin(theta);
+//        double x0 = a * rho, y0 = b * rho;
+//        pt1.x = cvRound(x0 + 1000 * (-b));
+//        pt1.y = cvRound(y0 + 1000 * (a));
+//        pt2.x = cvRound(x0 - 1000 * (-b));
+//        pt2.y = cvRound(y0 - 1000 * (a));
+//        line(img_hough, pt1, pt2, Scalar(0,0,255), 2, 8);
+//        //line(img_lane, pt1, pt2, Scalar::all(255), 1, 8);
+//    }
+
+    //namedWindow( "Display window", WINDOW_AUTOSIZE );
+    //imshow("img_canny",img_hough);
+    //cvShowImage("img_canny", img_hough);
+    //imshow("img_lane", img_lane);
+
+    //waitKey(0);
+//}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thiz, jbyteArray in, jbyteArray houghOut,
+                                                        jint image_width, jint image_height,
+                                                        jint max_x, jint max_y) {
+
+    jbyte* buf_ptr1 = env->GetByteArrayElements(in, nullptr);
+    jbyte* buf_ptr2 = env->GetByteArrayElements(houghOut, nullptr);
+
+    // src: in으로 가지고온 소스 mat / matOut: src로 바뀐걸로 main에서 활용할  mat
+    Mat src(image_height, image_width, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr1));
+    Mat matOut(image_height, image_width, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr2));
+
+    //Canny Edge detection을 위해 흑백으로 우선 바꿔줌
+    Mat img_gray;
+    cvtColor(src, img_gray, COLOR_BGRA2GRAY);
+
+    //회색인 이미지에서 캐니로 엣지 검출하기
+    Mat img_canny;
+    Canny(img_gray, img_canny, 50, 300, 3);
+    //점의 개수가 50보다 작으면 엣지가 아니라고 인식. 300보다 크면 엣지. 사이에 있으면 그 주위에 엣지가 있는지 확인 후 엣지라고 인식
+    //aparture = 소벨 연산 마스크 크기? 디폴트: 3
+
+    //HoughLinesP
+    vector<Vec4i>linesP;
+    HoughLinesP(img_canny, linesP, 1, CV_PI/180, 200, 50,5);
+    //minLineLength = 검출할 직선의 최소 길이 (단위는 픽셀)
+    //max_line_gap = 검출할 선 위의 점들 사이의 죄대 거리 (점 사이의 거리가 이 값보다 크면 다른 선으로 간주)
+
+    for (size_t i = 0; i < linesP.size(); i++)
+    {
+        Vec4i l = linesP[i];
+
+        // enpoint 좌표 설정하기
+        int x1 = min(max(x1, 0), max_x);
+        int y1 = min(max(y1, 0), max_y);
+        int x2 = min(max(x2, 0), max_x);
+        int y2 = min(max(y2, 0), max_y);
+
+        line(matOut, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(255, 0, 0), 2);
+    }
+
+    //HoughLines
+    std::vector<Vec2f> lines; // 허프 변환으로 검출된 직선을 저장할 어레이 (벡터 자료형으로, 2f는 데이터가 2개인  평면이라는 뜻)
+    HoughLines(img_canny, lines, 1, CV_PI / 180, 300, 0, 0); //HoughLines 함수 이용해서 img_canny로부터 직선 검출하고 lines 배열에 저장.
+    //rho = 변환된 그래프에서 선에서 원점까지의 거리 (계산할 픽셀 해상도) 1 사용하면 됨
+    //theta = 계산할 각도의 해상도. 모든 방향에서 직선을 검출할거면 PI/180사용하면 됨
+    //직선 검출 반응이 민감해서 thereshold 높였음
+
+    // 허프 트랜스폼
+//    for (size_t i = 0; i < lines.size(); i++) { // 검출된 모든 선 순회하기
+//        float rho = lines[i][0];
+//        float theta = lines[i][1];
+//        Point pt1, pt2;
+//        double a = cos(theta); //x,y축에 대한 삼각비
+//        double b = sin(theta);
+//        double x0 = a * rho; // x,y 기준 절편 좌표
+//        double y0 = b * rho;
+//
+//        pt1.x = cvRound(x0 + 1000 * (-b));
+//        pt1.y = cvRound(y0 + 1000 * (a));
+//        pt2.x = cvRound(x0 - 1000 * (-b));
+//        pt2.y = cvRound(y0 - 1000 * (a));
+//        line(matOut, pt1, pt2, Scalar(255, 0, 0), 3, LINE_AA); // 선 그리기
+//    }
+    env->ReleaseByteArrayElements(in, buf_ptr1, 0);
+    env->ReleaseByteArrayElements(houghOut, buf_ptr2, 0);
 }

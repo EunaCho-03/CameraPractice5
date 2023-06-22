@@ -1,7 +1,5 @@
 package com.example.camerapractice5;
 
-import static androidx.camera.view.PreviewView.ImplementationMode.COMPATIBLE;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -10,40 +8,28 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
-import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.ImageFormat;
 import android.graphics.Matrix;
-import android.graphics.YuvImage;
 import android.graphics.Color;
-import android.graphics.drawable.Drawable;
 import android.hardware.camera2.CameraManager;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaActionSound;
-import android.media.MediaCodec;
-import android.media.MediaMetadataRetriever;
-import android.media.MediaCodecInfo;
-import android.media.MediaFormat;
-import android.media.MediaMetadataRetriever;
-import android.media.MediaMuxer;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.MotionEvent;
-import android.view.Surface;
-import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -64,10 +50,8 @@ import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.MeteringPoint;
-import androidx.camera.core.DisplayOrientedMeteringPointFactory;
 import androidx.camera.core.MeteringPointFactory;
 import androidx.camera.core.Preview;
-import androidx.camera.core.impl.utils.executor.CameraXExecutors;
 import androidx.camera.core.resolutionselector.AspectRatioStrategy;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -84,60 +68,25 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Consumer;
 
-import static android.Manifest.permission.CAMERA;
 import static com.example.camerapractice5.ImageUtil.rotateBitmap;
 
-import com.bumptech.glide.Glide;
 import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.Utils;
 import org.opencv.core.Mat;
-import org.opencv.core.Point;
-import org.opencv.imgproc.Imgproc;
 import org.opencv.android.OpenCVLoader;
 //import org.bytedeco.javacv.FFmpegFrameRecorder;
 //import org.bytedeco.javacv.AndroidFrameConverter;
 //import org.bytedeco.javacv.Frame;
 //import org.bytedeco.javacv.Frame;
 //import org.bytedeco.javacv.FrameRecorder;
-import org.opencv.core.Core;
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfByte;
-import org.opencv.core.MatOfInt;
-import org.opencv.core.MatOfInt4;
-import org.opencv.core.Size;
 import org.opencv.videoio.VideoWriter;
-import org.opencv.videoio.Videoio;
 
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.OutputStream;
-import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-
-import io.reactivex.Completable;
-import io.reactivex.android.schedulers.AndroidSchedulers;
-import io.reactivex.schedulers.Schedulers;
-
-import com.example.camerapractice5.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity implements ImageAnalysis.Analyzer{ // 하위버전 단말기에 실행 안되는 메소드를 지원하기 위해 AppCompatActivity를 extend함
     //ImageAnalysis.Analyzer = 인터페이스 상속(나중에 analyze 함수를 오버라이드 하기 위해서)
@@ -149,8 +98,11 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
     //public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
     public native void ConvertRGBtoGray_withoutCV(byte[] in, byte[] out, int w, int h);
+    public native void drawHough(byte[]in, byte[]houghOut, int width, int height, int maxX, int maxY);
     byte[]out = null;
+    byte[]houghOut = null;
     Bitmap outBitmap = null;
+    Bitmap houghOutBitmap = null;
 
     static {
         System.loadLibrary("opencv_java4");
@@ -165,13 +117,14 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     MediaActionSound sound = new MediaActionSound();
     VideoCapture<Recorder> videoCapture = null;
     Button record, picture, flipCamera, flash;
-    Switch grayButton;
-    TextView grayOrColor;
+    RadioButton colorMode, grayMode, houghMode, cannyMode;
+    RadioGroup radioGroup;
     boolean flashOn = false;
-    boolean isGrayRecording = false;
+    boolean isGrayMode = false;
+    boolean isHoughMode = false;
     static PreviewView previewView;
     //    ImageView previewView;
-    ImageView grayView;
+    ImageView overPreview;
     ImageView imageView;
     ImageView focusSquare;
     Camera camera;
@@ -226,7 +179,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         setContentView(R.layout.activity_main);
 
         previewView = findViewById(R.id.previewView);
-        grayView = findViewById(R.id.grayView);
+        overPreview = findViewById(R.id.overPreview);
         record = findViewById(R.id.record);
         record.setVisibility(View.VISIBLE);
         picture = findViewById(R.id.picture);
@@ -240,8 +193,11 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         chronometer.setVisibility(View.INVISIBLE);
         zoombar = findViewById(R.id.zoombar);
         flash = findViewById(R.id.flash);
-        grayButton = findViewById(R.id.grayButton);
-        grayOrColor = findViewById(R.id.grayOrColor);
+        houghMode = findViewById(R.id.houghMode);
+        grayMode = findViewById(R.id.grayMode);
+        colorMode = findViewById(R.id.colorMode);
+        cannyMode = findViewById(R.id.cannyMode);
+        radioGroup = findViewById(R.id.radio_group);
 
         zoombar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -258,19 +214,23 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
             }
         });
 
-        grayButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener(){
+        radioGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
-            public void onCheckedChanged(CompoundButton button, boolean isChecked){
-                if(isChecked){
-                    grayView.setVisibility(View.VISIBLE);
-                    grayOrColor.setText("흑백 ON");
-                    processCameraProvider.unbindAll();
-                    bind();
-                }else{
-                    grayView.setVisibility(View.INVISIBLE);
-                    grayOrColor.setText("흑백 OFF");
-                    processCameraProvider.unbindAll();
-                    bind();
+            public void onCheckedChanged(RadioGroup group, int checkedId) {
+                switch(checkedId){
+                    case R.id.colorMode:
+//                        overPreview.setVisibility(View.INVISIBLE);
+//                        processCameraProvider.unbindAll();
+//                        bindColor();
+                    case  R.id.grayMode:
+
+                    case R.id.houghMode:
+                        overPreview.setVisibility(View.VISIBLE);
+                        processCameraProvider.unbindAll();
+                        bind();
+                    break;
+                    default:
+                    break;
                 }
             }
         });
@@ -456,7 +416,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                                 Image mediaImage = image.getImage();
                                 Bitmap bitmap = ImageUtil.mediaImageToBitmap(mediaImage);
 
-                                if(grayButton.isChecked()){
+                                if(isGrayMode){
                                     Bitmap grayBitmap =toGray(bitmap);
                                     float rotationDegrees = image.getImageInfo().getRotationDegrees();
                                     Bitmap rotatedBitmap = rotateBitmap(grayBitmap, rotationDegrees);
@@ -511,7 +471,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //                        }
 //                    }
 //                    else{
-                        MainActivity.this.captureVideo();
+                    MainActivity.this.captureVideo();
                     //}
                 }
             }
@@ -896,39 +856,40 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //        bindVideo();
 //    }
 
-    public void saveGrayVideo(Bitmap grayFrame, int rotation, double frameWidth, double frameHeight) throws IllegalAccessException, NoSuchFieldException {
-        if (videoWriter == null) {
-            Log.e("TEST", "Save Video");
-            double frameRate = 30;
-            Log.e("TEST", "Get frames");
-            String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
-            String fileName = time + ".mp4";
-            int fourcc = VideoWriter.fourcc('M', 'P', '4', 'V');
-            Log.e("TEST","Create videoWriter");
-
-//            System.setProperty("java.library.path", "C:\\pathToFolderContainingDLL");
-//            Field fieldSysPath = ClassLoader.class.getDeclaredField("sys_paths");
-//            fieldSysPath.setAccessible(true);
-//            fieldSysPath.set(null, null);
-
-            //System.loadLibrary("opencv_ffmpeg343_64");
-
-            videoWriter = new VideoWriter(fileName, fourcc, frameRate, new Size(frameWidth, frameHeight), false);
-        }else {
-            Log.e("TEST","videoWriter not null");
-            Bitmap rotated = rotateBitmap(grayFrame, rotation);
-            Log.e("TEST", "Set videoWriter");
-            byte[] grayByteArray2 = bitmapToByteArray(rotated);
-            Log.e("TEST", "Gray bitmap to byteArray");
-            videoWriter.write(new MatOfByte(grayByteArray2));
-            Log.e("TEST", "videoWrite matOfByte");
-        }
-    }
+//    public void saveGrayVideo(Bitmap grayFrame, int rotation, double frameWidth, double frameHeight) throws IllegalAccessException, NoSuchFieldException {
+//        if (videoWriter == null) {
+//            Log.e("TEST", "Save Video");
+//            double frameRate = 30;
+//            Log.e("TEST", "Get frames");
+//            String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
+//            String fileName = time + ".mp4";
+//            int fourcc = VideoWriter.fourcc('M', 'P', '4', 'V');
+//            Log.e("TEST","Create videoWriter");
+//
+////            System.setProperty("java.library.path", "C:\\pathToFolderContainingDLL");
+////            Field fieldSysPath = ClassLoader.class.getDeclaredField("sys_paths");
+////            fieldSysPath.setAccessible(true);
+////            fieldSysPath.set(null, null);
+//
+//            //System.loadLibrary("opencv_ffmpeg343_64");
+//
+//            videoWriter = new VideoWriter(fileName, fourcc, frameRate, new Size(frameWidth, frameHeight), false);
+//        }else {
+//            Log.e("TEST","videoWriter not null");
+//            Bitmap rotated = rotateBitmap(grayFrame, rotation);
+//            Log.e("TEST", "Set videoWriter");
+//            byte[] grayByteArray2 = bitmapToByteArray(rotated);
+//            Log.e("TEST", "Gray bitmap to byteArray");
+//            videoWriter.write(new MatOfByte(grayByteArray2));
+//            Log.e("TEST", "videoWrite matOfByte");
+//        }
+//    }
 
     void bind() {
         CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
         Preview preview = new Preview.Builder().build();
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
+        Log.e("TEST","PreviewView size: width = " + previewView.getMeasuredWidth() + "height = " + previewView.getMeasuredHeight());
         imageCapture = new ImageCapture.Builder().build();
         Recorder recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build();
         videoCapture = VideoCapture.withOutput(recorder);
@@ -956,10 +917,19 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //                    processFrame(grayFrame);
 //                }
 //            });
-            camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture, imageAnalysis);
+        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture, imageAnalysis);
 
     }
 
+    void bindColor() {
+        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
+        Preview preview = new Preview.Builder().build();
+        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+        imageCapture = new ImageCapture.Builder().build();
+        Recorder recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build();
+        videoCapture = VideoCapture.withOutput(recorder);
+        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture);
+    }
 
 //    void bindVideo() {
 //        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
@@ -1007,33 +977,57 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
     @Override
     public void analyze(@NonNull ImageProxy image) {
-        Bitmap bitmap = image.toBitmap();
-        //Log.e("TEST","Bitmap height = " + bitmap.getHeight() + "width = " + bitmap.getWidth());
-        image.close();
-        Bitmap gray = toGray(bitmap);
-        rotation = image.getImageInfo().getRotationDegrees();
-        //Log.e("TEST", "rotation "+rotation);
-        Bitmap rotated = rotateBitmap(gray, rotation);
+        if(grayMode.isChecked()){
+            Bitmap bitmap = image.toBitmap();
+            //Log.e("TEST","Bitmap height = " + bitmap.getHeight() + "width = " + bitmap.getWidth());
+            image.close();
+            Bitmap gray = toGray(bitmap);
+            rotation = image.getImageInfo().getRotationDegrees();
+            Bitmap rotated = rotateBitmap(gray, rotation);
+            DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+            int screenWidth = displayMetrics.widthPixels;
+            int screenHeight = displayMetrics.heightPixels;
+            Log.e("TEST","Gray screen size: width = " + overPreview.getWidth() + "height = " + overPreview.getHeight());
+            float scaleX = (float) screenWidth / rotated.getWidth();
+            float scaleY = (float) screenHeight / rotated.getHeight();
+            float scale = Math.min(scaleX, scaleY);
+            Matrix matrix = new Matrix();
+            matrix.setScale(scale, scale);
+            Bitmap resizedBitmap = Bitmap.createScaledBitmap(rotated, screenWidth, screenHeight, true);
+            Log.e("TEST","Resized bitmap size: width = " + resizedBitmap.getWidth() + "height = " + resizedBitmap.getHeight());
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            overPreview.setImageBitmap(rotated);
+        } else if(houghMode.isChecked()){
+            Bitmap bitmap = image.toBitmap();
+            image.close();
+            Bitmap houghBitmap = toHough(bitmap);
+            rotation = image.getImageInfo().getRotationDegrees();
+            Bitmap rotated = rotateBitmap(houghBitmap, rotation);
+            DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+            int screenWidth = displayMetrics.widthPixels;
+            int screenHeight = displayMetrics.heightPixels;
+            Bitmap resizedBitmap = Bitmap.createScaledBitmap(rotated, screenWidth, screenHeight, true);
+            overPreview.setImageBitmap(rotated);
+        }else{
+            overPreview.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    private Bitmap toHough(Bitmap bitmap){
+        byte[]in = bitmapToByteArray(bitmap);
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        houghOut = new byte[width * height * 4];
+        houghOutBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
         int screenWidth = displayMetrics.widthPixels;
         int screenHeight = displayMetrics.heightPixels;
-        float scaleX = (float) screenWidth / rotated.getWidth();
-        float scaleY = (float) screenHeight / rotated.getHeight();
-        //Log.e("TEST","Screen height = " + screenHeight + "width = " + screenWidth);
-        //Log.e("TEST","rotated width = " + rotated.getWidth() + "height = " + rotated.getHeight());
-        float scale = Math.min(scaleX, scaleY);
-        Matrix matrix = new Matrix();
-        matrix.setScale(scale, scale);
-        //Bitmap resizedBitmap = Bitmap.createBitmap(
-                //rotated, 0, 0, rotated.getWidth(), rotated.getHeight(), matrix, true);
-        Bitmap resizedBitmap = Bitmap.createScaledBitmap(rotated, screenWidth, screenHeight, true);
-        //Log.e("TEST","resized width = " + resizedBitmap.getWidth() + "height = " + resizedBitmap.getHeight());
-        BitmapFactory.Options options = new BitmapFactory.Options();
-        //options.inSampleSize = 4;
-        //grayView.setScaleType(ImageView.ScaleType.FIT_XY);
-        grayView.setImageBitmap(resizedBitmap);
-        //Log.e("TEST","grayPreivew height = " + grayView.getHeight() + "width = " + grayView.getWidth());
-        //processFrame(bitmap);
+        drawHough(in, houghOut, width, height, screenWidth, screenHeight);
+        Log.e("TEST","Hough Bitmap size: width = " + width + "height = " + height);
+        Log.e("TEST","Hough Screen size: width = " + screenWidth + "height = " + screenHeight);
+        ByteBuffer buffer = ByteBuffer.wrap(houghOut);
+        houghOutBitmap.copyPixelsFromBuffer(buffer);
+        return houghOutBitmap;
     }
 
     private Bitmap toGray(Bitmap bitmap){
@@ -1041,7 +1035,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //        bitmap.compress(Bitmap.CompressFormat.PNG,100,stream);
 //        byte[]in = stream.toByteArray();
         //ByteArrayInputStream in = new ByteArrayInputStream(byteArray);
-        byte[]in = bitmapToByteArray(bitmap);
+        byte[]in = bitmapToByteArray(bitmap); //비트맵을 바이트어레이로 변환(네이티브로 넘기기 위해)
         //Log.e("TEST","bitmap height = " + bitmap.getHeight());
         //Log.e("TEST","bitmap width = " + bitmap.getWidth());
         //Log.e("TEST","bitmap size = " + (bitmap.getHeight() * bitmap.getWidth()));
@@ -1053,9 +1047,10 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //        }
         //out = [in.length/3];
 
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
-        out = new byte[width * height * 4];
+        int width = bitmap.getWidth(); //비트맵 가로
+        int height = bitmap.getHeight(); //세로 사이즈
+        Log.e("TEST","Gray Bitmap size: width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
+        out = new byte[width * height * 4]; // 비트맵 사이즈에 r,g,b,a 들어가니 곱하기 4
         outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
 //        if(out == null)
 //        {
@@ -1070,12 +1065,12 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //            outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
 //        }
         //Log.e("TEST","width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
-        ConvertRGBtoGray_withoutCV(in, out, width, height);
+        ConvertRGBtoGray_withoutCV(in, out, width, height); // in 바이트어레이 넘겨서 out에 받는다
 
 //        int quarter = out.length / 4;
 //        ByteBuffer buffer = ByteBuffer.wrap(out,0,quarter);
-        ByteBuffer buffer = ByteBuffer.wrap(out);
-        outBitmap.copyPixelsFromBuffer(buffer);
+        ByteBuffer buffer = ByteBuffer.wrap(out); // out 바이트 어레이를 감싸는 버퍼 만들고
+        outBitmap.copyPixelsFromBuffer(buffer); // outBitmap에 복사
         //Bitmap CopiedBitmap = outBitmap.copy(outBitmap.getConfig(),true);
         //Log.e("TEST","width = " + previewView.getMeasuredWidth() + "height = " + previewView.getMeasuredHeight());
 //        DisplayMetrics displayMetrics = getResources().getDisplayMetrics();

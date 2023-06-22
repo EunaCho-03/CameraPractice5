@@ -17,12 +17,14 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
 
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
     <ImageView
-        android:id="@+id/grayView"
-        android:scaleType="fitCenter"
+        android:id="@+id/overPreview"
+        android:scaleType="centerCrop"
         android:adjustViewBounds="true"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
@@ -60,23 +62,6 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         app:tint="#fff"
         android:text="방향전환"/>
 
-    <Switch
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/grayButton"
-        android:checked="true"
-        android:switchMinWidth="3dp"
-        android:layout_marginLeft="300dp"
-        android:layout_marginTop="40dp"/>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/grayOrColor"
-        android:layout_marginLeft="315dp"
-        android:layout_marginTop="65dp"
-        android:text="흑백모드"
-        android:textColor="@color/white"/>
 
 
     <Button
@@ -86,8 +71,7 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         android:id="@+id/flash"
         android:layout_marginLeft="290dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:layout_marginTop="80dp"/>
-
+        android:layout_marginTop="40dp"/>
 
     <Chronometer
         android:id="@+id/chronometer"
@@ -116,6 +100,45 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         android:layout_height="wrap_content"
         android:src="@drawable/focus_rectangle"
         android:layout_centerInParent="true"/>
+
+    <RadioGroup
+        android:id="@+id/radio_group"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_alignParentTop="true"
+        android:layout_marginTop="90dp"
+        android:layout_marginLeft="280dp">
+
+        <RadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/colorMode"
+            android:text="컬러모드"
+            android:textColor="@color/white"/>
+
+        <RadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/grayMode"
+            android:text="흑백모드"
+            android:textColor="@color/white"/>
+
+        <RadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/houghMode"
+            android:text="허프 선 검출"
+            android:textColor="@color/white"/>
+
+        <RadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/cannyMode"
+            android:text="캐니 엣지 검출"
+            android:textColor="@color/white"/>
+
+    </RadioGroup>
     <!--
         <SeekBar
             android:layout_width="match_parent"
@@ -137,12 +160,21 @@ RelativeLayout: 다른 객체를 기준으로 위치, 방향 조절
         android:layout_marginEnd="60dp"
         android:max="100"
         android:progress="10"
+        android:layout_marginTop="20dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="40dp"
+        android:layout_centerHorizontal="true"
+        android:textColor="@color/white"
+        android:text="줌인 / 줌아웃"/>
 
 
 
