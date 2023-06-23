@@ -98,11 +98,14 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
     //public native void ConvertRGBtoGray(long matAddrInput, long matAddrResult);
     public native void ConvertRGBtoGray_withoutCV(byte[] in, byte[] out, int w, int h);
-    public native void drawHough(byte[]in, byte[]houghOut, int width, int height, int maxX, int maxY);
+    public native void drawHough(byte[]in, byte[]houghOut, int width, int height);
+    public native void drawCanny(byte[]in, byte[]cannyOut, int width, int height);
     byte[]out = null;
     byte[]houghOut = null;
     Bitmap outBitmap = null;
     Bitmap houghOutBitmap = null;
+    byte[]cannyOut = null;
+    Bitmap cannyOutBitmap = null;
 
     static {
         System.loadLibrary("opencv_java4");
@@ -121,7 +124,6 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     RadioGroup radioGroup;
     boolean flashOn = false;
     boolean isGrayMode = false;
-    boolean isHoughMode = false;
     static PreviewView previewView;
     //    ImageView previewView;
     ImageView overPreview;
@@ -225,6 +227,8 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                     case  R.id.grayMode:
 
                     case R.id.houghMode:
+
+                    case R.id.cannyMode:
                         overPreview.setVisibility(View.VISIBLE);
                         processCameraProvider.unbindAll();
                         bind();
@@ -416,7 +420,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                                 Image mediaImage = image.getImage();
                                 Bitmap bitmap = ImageUtil.mediaImageToBitmap(mediaImage);
 
-                                if(isGrayMode){
+                                if(grayMode.isChecked()){
                                     Bitmap grayBitmap =toGray(bitmap);
                                     float rotationDegrees = image.getImageInfo().getRotationDegrees();
                                     Bitmap rotatedBitmap = rotateBitmap(grayBitmap, rotationDegrees);
@@ -1003,14 +1007,29 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
             Bitmap houghBitmap = toHough(bitmap);
             rotation = image.getImageInfo().getRotationDegrees();
             Bitmap rotated = rotateBitmap(houghBitmap, rotation);
-            DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
-            int screenWidth = displayMetrics.widthPixels;
-            int screenHeight = displayMetrics.heightPixels;
-            Bitmap resizedBitmap = Bitmap.createScaledBitmap(rotated, screenWidth, screenHeight, true);
             overPreview.setImageBitmap(rotated);
-        }else{
+        }else if(cannyMode.isChecked()){
+            Bitmap bitmap = image.toBitmap();
+            image.close();
+            Bitmap cannyBitmap = toCanny(bitmap);
+            rotation = image.getImageInfo().getRotationDegrees();
+            Bitmap rotated = rotateBitmap(cannyBitmap, rotation);
+            overPreview.setImageBitmap(rotated);
+        } else{
             overPreview.setVisibility(View.INVISIBLE);
         }
+    }
+
+    private Bitmap toCanny(Bitmap bitmap){
+        byte[]in = bitmapToByteArray(bitmap);
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        cannyOut = new byte[width * height * 4];
+        cannyOutBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        drawCanny(in, cannyOut, width, height);
+        ByteBuffer buffer = ByteBuffer.wrap(cannyOut);
+        cannyOutBitmap.copyPixelsFromBuffer(buffer);
+        return cannyOutBitmap;
     }
 
     private Bitmap toHough(Bitmap bitmap){
@@ -1019,12 +1038,8 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         int height = bitmap.getHeight();
         houghOut = new byte[width * height * 4];
         houghOutBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
-        int screenWidth = displayMetrics.widthPixels;
-        int screenHeight = displayMetrics.heightPixels;
-        drawHough(in, houghOut, width, height, screenWidth, screenHeight);
+        drawHough(in, houghOut, width, height);
         Log.e("TEST","Hough Bitmap size: width = " + width + "height = " + height);
-        Log.e("TEST","Hough Screen size: width = " + screenWidth + "height = " + screenHeight);
         ByteBuffer buffer = ByteBuffer.wrap(houghOut);
         houghOutBitmap.copyPixelsFromBuffer(buffer);
         return houghOutBitmap;
