@@ -117,25 +117,25 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     Recording recording = null; // 실제 녹화를 실행함
     Chronometer chronometer;
     boolean running = false;
-    MediaActionSound sound = new MediaActionSound();
-    VideoCapture<Recorder> videoCapture = null;
-    Button record, picture, flipCamera, flash;
+    MediaActionSound sound = new MediaActionSound(); // 여러 소리를 냄
+    VideoCapture<Recorder> videoCapture = null; //카메라가 비디오프레임을 구성하게함
+    Button record, picture, flipCamera, flash; // 만든 버튼들
     RadioButton colorMode, grayMode, houghMode, cannyMode;
     RadioGroup radioGroup;
     boolean flashOn = false;
     boolean isGrayMode = false;
-    static PreviewView previewView;
+    static PreviewView previewView; // 카메라에 비치는 화면의 역할
     //    ImageView previewView;
     ImageView overPreview;
-    ImageView imageView;
+    ImageView imageView; // 이미지를 화면에 띄우기 위해서
     ImageView focusSquare;
     Camera camera;
     Image image;
-    ImageCapture imageCapture;
+    ImageCapture imageCapture; // 사진을 캡쳐할 수 있도록 기본 컨트롤을 제공
     ImageAnalysis imageAnalysis;
-    ProcessCameraProvider processCameraProvider;
+    ProcessCameraProvider processCameraProvider; // 수명주기와 연결하여 기본적인 카메라 접근을 부여함(카메라가 핸드폰에 있는지, 카메라 정보등)
     VideoWriter videoWriter;
-    int cameraFacing = CameraSelector.LENS_FACING_BACK;
+    int cameraFacing = CameraSelector.LENS_FACING_BACK; // 디폴트: 카메라 후면
     CameraManager cameraManager;
     String getCameraID;
     //Byte[] bytes = previewView;
@@ -163,9 +163,9 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     int rotation = 0;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+    protected void onCreate(Bundle savedInstanceState) { // onCreate: 액티비티가 생성될때 호출되며 사용자 인터페이스(클래스가 구현해야할 행동을 지정함) 초기화에 사용
+        super.onCreate(savedInstanceState); // super class 호출 (activity를 구현하는데 필요한 과정) savedInstanceState = 화면 구성이 변경될때 (가로모드, 세로모드 전환 / 언어/ 입력기기)
+        setContentView(R.layout.activity_main); // layout에 있는 activity_main.xml로 화면 정의
 
         if (OpenCVLoader.initDebug()) { //OpenCv 잘 가지고 왔는지 확인
             Log.d("Loaded", "Success");
@@ -178,9 +178,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        setContentView(R.layout.activity_main);
-
-        previewView = findViewById(R.id.previewView);
+        previewView = findViewById(R.id.previewView); // findViewById = activity_main.xml에서 설정된 뷰를 가져오는 메소드
         overPreview = findViewById(R.id.overPreview);
         record = findViewById(R.id.record);
         record.setVisibility(View.VISIBLE);
@@ -248,11 +246,11 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
             e.printStackTrace();
         }
 
-        if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) { // 권한 체크
             activityResultLauncher.launch(Manifest.permission.CAMERA);
         } else {
             Log.e("TEST", "Going to bind");
-            bind();
+            bind(); // 권한 부여 받았다면 카메라 연결
         }
 
         // Get the WindowManager service
@@ -270,13 +268,13 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         previewView.setOnTouchListener(new View.OnTouchListener() {
             @SuppressLint("RestrictedApi")
             @Override
-            public boolean onTouch(View view, MotionEvent motionEvent) {
+            public boolean onTouch(View view, MotionEvent motionEvent) { // onTouch는 boolean이여야함
                 switch (motionEvent.getAction() & MotionEvent.ACTION_MASK) {
 
                     case MotionEvent.ACTION_DOWN:
                         return true;
 
-                    case MotionEvent.ACTION_POINTER_DOWN:
+                    case MotionEvent.ACTION_POINTER_DOWN: // 손가락으로 눌렀을때
 
                         initial_ratio = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getZoomRatio();
                         initial_zoom = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getLinearZoom();
@@ -286,9 +284,9 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                         initial_distance = Math.sqrt(Math.pow(touch_interval_X, 2) + Math.pow(touch_interval_Y, 2));
                         return true;
 
-                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_UP: // 눌렀다 땠을때
                         //가로모드일때는 둘 다 잘됨. 하지만 이미지뷰를 rotate시켜놔서 그런지 세로모드일때는 focusSquare은 잘 보여지지만 focus가 안맞음. 그래서 rotate 시켜놓으면 반대로 포커스는 맞는데 focusSquare 위치가 틀림
-                        MeteringPointFactory factory = previewView.getMeteringPointFactory();
+                        MeteringPointFactory factory = previewView.getMeteringPointFactory();  // MeteringPoint를 만듣는 곳
                         float motionEventX = motionEvent.getX();
                         float motionEventY = motionEvent.getY();
                         Log.e("TEST", "X = " + motionEventX + " Y = " + motionEventY);
@@ -303,8 +301,8 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                         }, 500);
 
                         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                            MeteringPoint point = factory.createPoint(motionEvent.getX(), motionEvent.getY());
-                            FocusMeteringAction action = new FocusMeteringAction.Builder(point).build();
+                            MeteringPoint point = factory.createPoint(motionEvent.getX(), motionEvent.getY()); // MeterinPoint: 카메라의 지점. 그 지점을 x,y 좌표로 나타냄
+                            FocusMeteringAction action = new FocusMeteringAction.Builder(point).build(); // 찍은 좌표에 포커스 맞추기
                             CameraControl cameraControl = camera.getCameraControl();
                             cameraControl.startFocusAndMetering(action);
                         } else if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
@@ -314,7 +312,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                             //MeteringPoint point = factory.createPoint(maxX - motionEventX,motionEventY);
                             Log.e("TEST", "RotatedX = " + (float) ((motionEventY) / 1.97) + " RotatedY = " + (float) (maxX - motionEventX / 1.97));
                             FocusMeteringAction action = new FocusMeteringAction.Builder(point).build();
-                            CameraControl cameraControl = camera.getCameraControl();
+                            CameraControl cameraControl = camera.getCameraControl(); // CameraControl 기능: 확대/축소, 초점, 노출 보정
                             cameraControl.startFocusAndMetering(action);
                         }
 
@@ -399,26 +397,27 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         flipCamera.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (cameraFacing == CameraSelector.LENS_FACING_BACK) {
+                if (cameraFacing == CameraSelector.LENS_FACING_BACK) { // 후면 카메라였다면 전면으로
                     cameraFacing = CameraSelector.LENS_FACING_FRONT;
                 } else {
-                    cameraFacing = CameraSelector.LENS_FACING_BACK;
+                    cameraFacing = CameraSelector.LENS_FACING_BACK; // 전면으였다면 후면으로
                 }
-                processCameraProvider.unbindAll();
-                bind();
+                processCameraProvider.unbindAll(); //기존 생명주기에 있던 연결들을 끊고
+                bind(); //변경된 방향으로 새로운 카메라 뷰 생성하기 (원하는 객체를 바인드)
             }
         });
 
         picture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                imageCapture.takePicture(ContextCompat.getMainExecutor(MainActivity.this),
-                        new ImageCapture.OnImageCapturedCallback() {
+                //sound.play(MediaActionSound.SHUTTER_CLICK); // 셔터 사운드
+                imageCapture.takePicture(ContextCompat.getMainExecutor(MainActivity.this), // 메인스레드에서 작동할 것이다
+                        new ImageCapture.OnImageCapturedCallback() { // 이미지 캡쳐가 완료되면 콜백 (콜백:어떤 조건이 충족되면(이벤트가 발생하면) 이 코드 처리를 해라)
                             @Override
-                            public void onCaptureSuccess(@NonNull ImageProxy image) {
-                                @SuppressLint({"UnsafeExperimentalUsageError", "UnsafeOptInUsageError"})
-                                Image mediaImage = image.getImage();
-                                Bitmap bitmap = ImageUtil.mediaImageToBitmap(mediaImage);
+                            public void onCaptureSuccess(@NonNull ImageProxy image) { // close하는(끝내는) 콜백 (여기서 @NonNull ImageProxy image = 캡쳐된 이미지
+                                @SuppressLint({"UnsafeExperimentalUsageError", "UnsafeOptInUsageError"}) // UnsafeExperimentalUsageError와 UnsafeOptInUsageError 검사 항목을 건너 뛰어라
+                                Image mediaImage = image.getImage(); // mediaImage = 캡쳐된 이미지
+                                Bitmap bitmap = ImageUtil.mediaImageToBitmap(mediaImage); //만들어둔 ImageUtil의 이미지를 비트맵으로 변환시키는 메소드를 씀
 
                                 if(grayMode.isChecked()){
                                     Bitmap grayBitmap =toGray(bitmap);
@@ -427,10 +426,10 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                                     imageView.setImageBitmap(rotatedBitmap);
                                     saveImage(rotatedBitmap);
                                 }else{
-                                    float rotationDegrees = image.getImageInfo().getRotationDegrees();
-                                    Bitmap rotatedBitmap = rotateBitmap(bitmap, rotationDegrees);
-                                    imageView.setImageBitmap(rotatedBitmap);
-                                    saveImage(rotatedBitmap);
+                                    float rotationDegrees = image.getImageInfo().getRotationDegrees(); // 회전시켜야할 각도
+                                    Bitmap rotatedBitmap = rotateBitmap(bitmap, rotationDegrees);  // 그 각도만큼 회전시킴
+                                    imageView.setImageBitmap(rotatedBitmap); // 이미지뷰에 비트맵을 로드해서 출력한다
+                                    saveImage(rotatedBitmap); // 저장하는 함수 호출
                                 }
 
                             }
@@ -439,12 +438,12 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
             }
         });
 
-        record.setOnClickListener(new View.OnClickListener() {
+        record.setOnClickListener(new View.OnClickListener() {  //카메라, 오디오, 외부저장소 권한 체크
             @Override
             public void onClick(View view) {
                 //카메라, 오디오, 외부저장소 권한 체크
-                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    activityResultLauncher.launch(Manifest.permission.RECORD_AUDIO);
+                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { // 권한 확인
+                    activityResultLauncher.launch(Manifest.permission.RECORD_AUDIO); // 권한을 부여 받지 못했다면 다시 요청
                     //} else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                     //    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
                 } else {
@@ -475,7 +474,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //                        }
 //                    }
 //                    else{
-                    MainActivity.this.captureVideo();
+                    MainActivity.this.captureVideo(); // 모든 권한이 있다면 녹화하는 함수 호출
                     //}
                 }
             }
@@ -483,7 +482,11 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     }
 
     private final ActivityResultLauncher<String> activityResultLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), result -> {
+        //람다 호출 방식: (매개변수, ...) -> {실행문}
+        //activityResultLauncher = 활동을 시작하고 다시 결과를 받는다 (여기서는 권한을 부여받았는지 확인하는 용도)
+        //A 액티비티가 B액티비티 결과에 따라 실행하는 프로그램이 달라질때 여기서 결과를 확인할 수 있음
         if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            //권한을 이미 부여 받았다면 요청을 다시 하지 않는다 호출 결과: PERMISSION_GRANTED(권한 있음) 또는 PERMISSION_DENITED (권한 없음)
             captureVideo();
         } else if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             bind();
@@ -491,44 +494,47 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     });
 
     public void saveImage(Bitmap rotatedBitmap) {
-        Uri images;
-        ContentResolver contentResolver = getContentResolver();
-        images = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        Uri images; // Uri = 리소스(외부 앱, 이미지, 택스트 등)에 접근할 수 있는 식별자 역할 (주소)
+        ContentResolver contentResolver = getContentResolver(); // 컨텐츠에 엑세스를 줌 (데이터를 읽는다). 기능: 생성, 검색, 업데이트 및 삭제
+        images = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY); //ContentResolver를 통해 이미지를 넣어주고 해당 위치의 Uri를 받는다
 
-        String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
-        ContentValues contentValues = new ContentValues(0);
-        contentValues.put(MediaStore.Images.Media.DISPLAY_NAME, time + ".JPG");
-        contentValues.put(MediaStore.Images.Media.MIME_TYPE, "images/");
+        String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis()); // 기기의 지역을 판별하고 현재 시간을 저장
+        ContentValues contentValues = new ContentValues(0); // ContentValues: 아래정보들의 이름과 값을 관리하기 위해 만들어진 객체
+        contentValues.put(MediaStore.Images.Media.DISPLAY_NAME, time + ".JPG"); // 파일 이름
+        contentValues.put(MediaStore.Images.Media.MIME_TYPE, "images/"); // MIME_TYPE = 데이터가 어떤 형식인지 ex.text / image / audio / video / application
         contentValues.put(MediaStore.Video.Media.RELATIVE_PATH, "Pictures/CameraX-Images");
-        Uri uri = contentResolver.insert(images, contentValues);
+        Uri uri = contentResolver.insert(images, contentValues); // 주소 지정
         Bitmap bitmap = Bitmap.createBitmap(rotatedBitmap);
         try {
-            OutputStream outputStream = contentResolver.openOutputStream(Objects.requireNonNull(uri));
-            rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
+            OutputStream outputStream = contentResolver.openOutputStream(Objects.requireNonNull(uri)); // Outputstream = 파일에 데이터 쓰기, uri는 null이면 안됨
+            rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream); // OutputStream은 비트맵 이미지를 저장하기 위한 객체를 받는다. outputStream이 가지고있는 uri 주소에 저장
+            //비트맵의 용량이 너무 커서 저장할때는 압축을 시켰다가 화면에 띄울때 다시 100%로 보여준다는 뜻
             String msg = "촬영 완료: " + images;
             Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
+        } catch (Exception e) { // 예외 케이스
             e.printStackTrace();
         }
     }
 
     public void captureVideo() {
-        Recording recording1 = recording;
+        Recording recording1 = recording; // recording1이라는 변수에 recording값을 넣음
         Log.e("TEST","Test if null");
-        if (recording1 != null) {
-            recording1.stop();
-            recording = null;
+
+
+        if (recording1 != null) { // 만약 지금 실행되고있는 녹화가 있다면
+            recording1.stop(); // 멈추고
+            recording = null; // recording값에 다시 null
             Log.e("TEST","Recording not null");
             return;
         }
 
         Log.e("TEST","Recording null");
         String time = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.getDefault()).format(System.currentTimeMillis());
-        ContentValues contentValues = new ContentValues();
+        ContentValues contentValues = new ContentValues(); // ContentValues:이름과 값을 관리하는 객체
         contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, time);
         contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4");
         contentValues.put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/CameraX-Video");
-
+        //MediaStoreOutputOptions = 아웃풋(비디오)를 MediaStore에 저장하는 옵션 (여기는 외부 저장소에)
         MediaStoreOutputOptions options = new MediaStoreOutputOptions.Builder(getContentResolver(), MediaStore.Video.Media.EXTERNAL_CONTENT_URI).setContentValues(contentValues).build();
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -538,25 +544,26 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         Recorder recorder = videoCapture.getOutput();
         PendingRecording pendingRecording = recorder.prepareRecording(MainActivity.this, options)
                 .withAudioEnabled();
-        recording = pendingRecording.start(ContextCompat.getMainExecutor(MainActivity.this), new Consumer<VideoRecordEvent>() {
-
+        recording = pendingRecording.start(ContextCompat.getMainExecutor(MainActivity.this), new Consumer<VideoRecordEvent>() { //recording에 캡쳐된 비디오 담기
             @Override
             public void accept(VideoRecordEvent videoRecordEvent) {
                 //Log.e("TEST", "video accepted " + videoRecordEvent);
+                //recording 계속 실행 (accept 함수로 인해 Finalize 될때까지 돌아감)
                 if (videoRecordEvent instanceof VideoRecordEvent.Start) {
                     record.setEnabled(true); // record 시작
                     //Log.e("TEST", "On Progress");
                     //sound.play(MediaActionSound.START_VIDEO_RECORDING);
 
-                    if (!running) {
+                    //녹화 버튼을 두번째 눌렀다는것은 녹화를 멈추고 저장하고싶다는 뜻이니
+                    if (!running) { // 디폴트: false
                         chronometer.setVisibility(View.VISIBLE);
-                        chronometer.setBase(SystemClock.elapsedRealtime());
-                        chronometer.start();
+                        chronometer.setBase(SystemClock.elapsedRealtime()); // 현재시간과 마지막으로 클릭된 시간 차이 (한번 눌렀으니 0)
+                        chronometer.start(); // 타이머 시작
                         running = true;
                     }
 
-                } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
-                    if (!((VideoRecordEvent.Finalize) videoRecordEvent).hasError()) {
+                } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) { // 녹화 끝나서
+                    if (!((VideoRecordEvent.Finalize) videoRecordEvent).hasError()) { // 에러가 없다면
                         Log.e("TEST","Video finalized");
                         //sound.play(MediaActionSound.STOP_VIDEO_RECORDING);
                         chronometer.setBase(SystemClock.elapsedRealtime());
@@ -890,13 +897,15 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //    }
 
     void bind() {
-        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
-        Preview preview = new Preview.Builder().build();
-        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build(); // 카메라 방향 지정
+        Preview preview = new Preview.Builder().build(); // 프리뷰 만들기
+        preview.setSurfaceProvider(previewView.getSurfaceProvider()); //만든 프리뷰를 previewView에 연결하기
         Log.e("TEST","PreviewView size: width = " + previewView.getMeasuredWidth() + "height = " + previewView.getMeasuredHeight());
-        imageCapture = new ImageCapture.Builder().build();
-        Recorder recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build();
-        videoCapture = VideoCapture.withOutput(recorder);
+        imageCapture = new ImageCapture.Builder().build(); // 캡쳐하는 클래스 빌드
+        Recorder recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build(); // 새로운 퀄리티의 recorder 생성
+        videoCapture = VideoCapture.withOutput(recorder); // recorder: VideoCapture과 결합된 VideoOutput의 구현. 동영상 및 오디오 캡쳐를 실행하는데 사용됨
+        //videoCapture = 화면에 띄우는 역할
+        //recorder = 화면에 띄워지는 비디오를 저장하는 역할
         ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
         selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
         imageAnalysis = new ImageAnalysis.Builder()
@@ -922,7 +931,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //                }
 //            });
         camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture, imageAnalysis);
-
+        // 선택한 카메라와 사용사례를 카메라 수명주기(카메라를 여는 시점, 캡쳐 세션을 생성할 시점, 중지 및 종료 시점) 연결. 수명주기전환에 맞춰 카메라 상태가 적절히 변경될 수 있음
     }
 
     void bindColor() {
@@ -1138,7 +1147,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //    };
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
+    protected void onDestroy() { // 화면이 소멸했을때 실행:
+        super.onDestroy();  // 액티비티 종료
     }
 }

@@ -136,12 +136,11 @@ Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thi
     Mat img_canny;
     Canny(src, img_canny, 50, 300, 3);
     //점의 개수가 50보다 작으면 엣지가 아니라고 인식. 300보다 크면 엣지. 사이에 있으면 그 주위에 엣지가 있는지 확인 후 엣지라고 인식
-    //aparture = 소벨 연산 마스크 크기? 디폴트: 3
+    //aparture = 소벨 연산 마스크 크기
 
     //HoughLinesP
     vector<Vec4i>linesP; // 4i = 4개의 integer(endpoints 4개)를 넣을 벡터타입 선언
     HoughLinesP(img_canny, linesP, 1, CV_PI/180, 200, 50,5); //linesP애 선둘을 저장할거임 (배열)
-    //
     //minLineLength = 검출할 직선의 최소 길이 (단위는 픽셀)
     //max_line_gap = 검출할 선 위의 점들 사이의 죄대 거리 (점 사이의 거리가 이 값보다 크면 다른 선으로 간주)
 
@@ -155,32 +154,32 @@ Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thi
 
     //HoughLines
 
-    std::vector<Vec2f> lines; // 허프 변환으로 검출된 직선을 저장할 어레이 (벡터 자료형으로, 2f는 데이터가 float형 2개)
+    //std::vector<Vec2f> lines; // 허프 변환으로 검출된 직선을 저장할 어레이 (벡터 자료형으로, 2f는 데이터가 float형 2개)
     //2개 데이터는 각각 [rho, theta]
-    HoughLines(img_canny, lines, 1, CV_PI / 180, 300, 0, 0); //HoughLines 함수 이용해서 img_canny로부터 직선 검출하고 lines 배열에 저장.
-    //rho = 변환된 그래프에서 선에서 원점까지의 거리 (계산할 픽셀 해상도) 1 사용하면 됨
+    //HoughLines(img_canny, lines, 1, CV_PI / 180, 300, 0, 0); //HoughLines 함수 이용해서 img_canny로부터 직선 검출하고 lines 배열에 저장.
+    //rho = 변환된 그래프에서 선에서 원점까지의 거리 (계산할 픽셀 해상도) 1 사용하면 됨. 원점(0,0)은 맨위 왼쪽
     //theta = 계산할 각도의 해상도. 모든 방향에서 직선을 검출할거면 PI/180사용하면 됨
     //직선 검출 반응이 민감해서 thereshold 높였음
 
     // 허프 트랜스폼
-
-    for (size_t i = 0; i < lines.size(); i++) { // 검출된 모든 선 순회하기
-        float rho = lines[i][0]; //i번째 검출된 선, lines 배열에서 첫번째인 rho
-        float theta = lines[i][1]; // i번째 검출된 선, lines 배열에서 두번째인 theta
-        Point pt1, pt2; // 시작점과 끝점 선언
-        double a = cos(theta); //x,y축에 대한 삼각비
-        double b = sin(theta);
-        //(x0,y0) 좌표 구하기
-        double x0 = a * rho; // cosθ * rho
-        double y0 = b * rho; // sinθ * rho
-
-        pt1.x = cvRound(x0 + 1000 * (-b)); // 시작점의 x좌표. 곱하는 선으로 선분 길이를 조정함.
-        // 1000보다 작으면 더 짧은 선이, 크면 더 긴 선이 그려질거임
-        pt1.y = cvRound(y0 + 1000 * (a));
-        pt2.x = cvRound(x0 - 1000 * (-b)); // 끝점의 y좌표
-        pt2.y = cvRound(y0 - 1000 * (a));
-        line(matOut, pt1, pt2, Scalar(255, 0, 0), 3, LINE_AA); // 선 그리기
-    }
+//    for (size_t i = 0; i < lines.size(); i++) { // 검출된 모든 선 순회하기
+//        float rho = lines[i][0]; //i번째 검출된 선, lines 배열에서 첫번째인 rho
+//        float theta = lines[i][1]; // i번째 검출된 선, lines 배열에서 두번째인 theta
+//        Point pt1, pt2; // 시작점과 끝점 선언
+//        double a = cos(theta); //x,y축에 대한 삼각비
+//        double b = sin(theta);
+//        //(x0,y0) 좌표 구하기
+//        double x0 = a * rho; // cosθ * rho
+//        double y0 = b * rho; // sinθ * rho
+//
+//        pt1.x = cvRound(x0 + 1000 * (-b)); // 시작점의 x좌표. 곱하는 선으로 선분 길이를 조정함.
+//        x0: a *rho로, 검출된 선의 x좌표
+//        // 1000보다 작으면 더 짧은 선이, 크면 더 긴 선이 그려질거임
+//        pt1.y = cvRound(y0 + 1000 * (a)); //cvRound: 가까운 짝수 integer로
+//        pt2.x = cvRound(x0 - 1000 * (-b)); // 끝점의 y좌표
+//        pt2.y = cvRound(y0 - 1000 * (a));
+//        line(matOut, pt1, pt2, Scalar(255, 0, 0), 3, LINE_AA); // 선 그리기
+//    }
 
     env->ReleaseByteArrayElements(in, buf_ptr1, 0);
     env->ReleaseByteArrayElements(houghOut, buf_ptr2, 0);
