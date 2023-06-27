@@ -46,14 +46,14 @@ Java_com_example_camerapractice5_MainActivity_ConvertRGBtoGray_1withoutCV(JNIEnv
 
     //Mat alpha(h, w, CV_8UC1, Scalar(255));
 
-    std::vector<Mat> chan_dst; //채널 도착지점. 벡터는 행렬, 여기서 < >안에 넣을 데이터타입을 선언
-    cv::split(matOut, chan_dst); //4채널을 가진 matOut을 split해서 각각의 한채널을 chan_dst 배열에 담는다
+    vector<Mat> chan_dst; //채널 도착지점. 벡터는 행렬, 여기서 < >안에 넣을 데이터타입을 선언
+    split(matOut, chan_dst); //4채널을 가진 matOut을 split해서 각각의 한채널을 chan_dst 배열에 담는다
 
     for(int i=0; i<3; i++)
         t.copyTo(chan_dst[i]); // 순서대로 chan_dst에 0,1,2에 t의 B,G,R 값을 넣는다
     chan_dst[3].setTo(255); // BGRA에서 0123, 3은 A인데 이 값은 디폴트로 255를 준다 (A: 투명도)
 
-    cv::merge(chan_dst, matOut); // 다시 하나의 채널로 합치기 위해 값이 담긴 배열인 chan_dst의 결과를 matOut에 담는다
+    merge(chan_dst, matOut); // 다시 하나의 채널로 합치기 위해 값이 담긴 배열인 chan_dst의 결과를 matOut에 담는다
 
     //LOGE("matOut 3 %d %d %d %p\n", matOut.rows, matOut.cols, matOut.channels(), matOut.data);
 //    LOGE("matIn  %d x %d x %d, buf_ptr1 %p matIn.data %p\n", matIn.rows, matIn.cols, matIn.channels(), buf_ptr1, matIn.data);
@@ -128,6 +128,8 @@ Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thi
     Mat src(image_height, image_width, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr1));
     Mat matOut(image_height, image_width, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr2));
 
+    src.copyTo(matOut);
+
     //Canny Edge detection을 위해 흑백으로 우선 바꿔줌
     Mat img_gray;
     cvtColor(src, img_gray, COLOR_BGRA2GRAY);
@@ -140,7 +142,8 @@ Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thi
 
     //HoughLinesP
     vector<Vec4i>linesP; // 4i = 4개의 integer(endpoints 4개)를 넣을 벡터타입 선언
-    HoughLinesP(img_canny, linesP, 1, CV_PI/180, 200, 50,5); //linesP애 선둘을 저장할거임 (배열)
+    //linesP애 선둘을 저장할거임 (배열)
+    HoughLinesP(img_canny, linesP, 1, CV_PI/180, 200, 50,5);
     //minLineLength = 검출할 직선의 최소 길이 (단위는 픽셀)
     //max_line_gap = 검출할 선 위의 점들 사이의 죄대 거리 (점 사이의 거리가 이 값보다 크면 다른 선으로 간주)
 
@@ -153,7 +156,6 @@ Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thi
     }
 
     //HoughLines
-
     //std::vector<Vec2f> lines; // 허프 변환으로 검출된 직선을 저장할 어레이 (벡터 자료형으로, 2f는 데이터가 float형 2개)
     //2개 데이터는 각각 [rho, theta]
     //HoughLines(img_canny, lines, 1, CV_PI / 180, 300, 0, 0); //HoughLines 함수 이용해서 img_canny로부터 직선 검출하고 lines 배열에 저장.

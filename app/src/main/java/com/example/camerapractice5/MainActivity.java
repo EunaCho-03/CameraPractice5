@@ -10,8 +10,11 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.drawable.BitmapDrawable;
 import android.hardware.camera2.CameraManager;
 import android.media.Image;
 import android.media.ImageReader;
@@ -71,6 +74,7 @@ import androidx.core.util.Consumer;
 import static com.example.camerapractice5.ImageUtil.rotateBitmap;
 
 import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.android.OpenCVLoader;
 //import org.bytedeco.javacv.FFmpegFrameRecorder;
@@ -78,6 +82,7 @@ import org.opencv.android.OpenCVLoader;
 //import org.bytedeco.javacv.Frame;
 //import org.bytedeco.javacv.Frame;
 //import org.bytedeco.javacv.FrameRecorder;
+import org.opencv.imgproc.Imgproc;
 import org.opencv.videoio.VideoWriter;
 
 
@@ -147,8 +152,8 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
     //double first_interval_Y = 0; // Y 터치 간격
     double first_distance = 0;
-    double initial_distance = 0;
-    float initial_zoom = -1.0f;
+    double initial_distance;
+    float initial_zoom;
     double first_X = 0;
     double first_Y = 0;
     double second_X = 0;
@@ -278,6 +283,8 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
                         initial_ratio = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getZoomRatio();
                         initial_zoom = Objects.requireNonNull(camera.getCameraInfo().getZoomState().getValue()).getLinearZoom();
+                        Log.e("TEST","Initial ratio = " + initial_ratio);
+                        //Log.e("TEST","Intial zoom1 = " + initial_zoom);
 
                         double touch_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1));
                         double touch_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1));
@@ -289,10 +296,11 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                         MeteringPointFactory factory = previewView.getMeteringPointFactory();  // MeteringPoint를 만듣는 곳
                         float motionEventX = motionEvent.getX();
                         float motionEventY = motionEvent.getY();
-                        Log.e("TEST", "X = " + motionEventX + " Y = " + motionEventY);
+                        //Log.e("TEST", "X = " + motionEventX + " Y = " + motionEventY);
                         focusSquare.setX(motionEventX - (focusSquare.getWidth() / 2));
                         focusSquare.setY(motionEventY - (focusSquare.getHeight() / 2));
                         focusSquare.setVisibility(View.VISIBLE);
+                        //Log.e("TEST","Initial zoom = " + camera.getCameraInfo().getIntrinsicZoomRatio());
                         new Handler().postDelayed(new Runnable() {
                             @Override
                             public void run() {
@@ -310,7 +318,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                             float rotatedMeteringY = previewView.getHeight() - motionEventX;
                             MeteringPoint point = factory.createPoint((float) ((motionEventY) / 1.97), (float) (maxX - motionEventX / 1.97));
                             //MeteringPoint point = factory.createPoint(maxX - motionEventX,motionEventY);
-                            Log.e("TEST", "RotatedX = " + (float) ((motionEventY) / 1.97) + " RotatedY = " + (float) (maxX - motionEventX / 1.97));
+                            //Log.e("TEST", "RotatedX = " + (float) ((motionEventY) / 1.97) + " RotatedY = " + (float) (maxX - motionEventX / 1.97));
                             FocusMeteringAction action = new FocusMeteringAction.Builder(point).build();
                             CameraControl cameraControl = camera.getCameraControl(); // CameraControl 기능: 확대/축소, 초점, 노출 보정
                             cameraControl.startFocusAndMetering(action);
@@ -351,28 +359,26 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                         return true;
 
                     case MotionEvent.ACTION_MOVE:
-
-
                         if (motionEvent.getPointerCount() == 2) {
-
                             try {
 
                                 double now_interval_X = (double) Math.abs(motionEvent.getX(0) - motionEvent.getX(1)); // 두 손가락 X좌표 차이 절대값
                                 double now_interval_Y = (double) Math.abs(motionEvent.getY(0) - motionEvent.getY(1)); // 두 손가락 Y좌표 차이 절대값
                                 double now_distance = Math.sqrt(Math.pow(now_interval_X, 2) + Math.pow(now_interval_Y, 2));
 
-                                float zoom_delta = (float) (now_distance / initial_distance); // 현재 줌인/줌아웃을 하기 위해 당긴 거리와 처음 화면에 댔을때 거리의 차이
-                                float zoom_delta_trasposed = zoom_delta - 1.f; // 예) 줌아웃: 0.8 , 줌인: 1.2라면 같은 비율로 밀거나 당겨지기 위해 1을 빼 -0.2, 0.2를 만듬
-                                final float zoom_ratio = 0.25f; // 너무 빨리 움직이므로 속도를 줄이기 위해
-                                camera.getCameraControl().setLinearZoom(initial_zoom + (zoom_delta_trasposed * zoom_ratio)); // 원래 카메라의 줌값에 1을뺀 값(줌 비율)을 0.25만큼 곱한 값을 더함
+                                float change_zoom = (float) (now_distance / initial_distance);
+                                camera.getCameraControl().setZoomRatio(initial_ratio*change_zoom);
+                                Log.e("TEST","Initial ratio = " + initial_ratio);
 
+//                                float zoom_delta = (float) (now_distance / initial_distance); // 현재 줌인/줌아웃을 하기 위해 당긴 거리와 처음 화면에 댔을때 거리의 차이
+//                                float zoom_delta_trasposed = zoom_delta - 1.f; // 예) 줌아웃: 0.8 , 줌인: 1.2라면 같은 비율로 밀거나 당겨지기 위해 1을 빼 -0.2, 0.2를 만듬
+//                                final float zoom_ratio = 0.25f; // 너무 빨리 움직이므로 속도를 줄이기 위해
+//                                Log.e("TEST","Initial zoom2 = " + initial_zoom);
+//                                camera.getCameraControl().setLinearZoom(initial_zoom + (zoom_delta_trasposed * zoom_ratio)); // 원래 카메라의 줌값에 1을뺀 값(줌 비율)을 0.25만큼 곱한 값을 더함
                             } catch (IllegalArgumentException e) {
                                 e.printStackTrace();
-                            }
-                            return true;
-
+                            } return true;
                         }
-
                     default:
                         return false;
                 }
@@ -425,13 +431,42 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                                     Bitmap rotatedBitmap = rotateBitmap(grayBitmap, rotationDegrees);
                                     imageView.setImageBitmap(rotatedBitmap);
                                     saveImage(rotatedBitmap);
-                                }else{
+                                }else if(houghMode.isChecked()){
+                                    Bitmap houghBitmap = toHough(bitmap);
+//                                    //BitmapDrawable drawable = (BitmapDrawable)overPreview.getDrawable();
+//                                    //Bitmap houghBit = drawable.getBitmap();
+//                                    //float move = (bitmap.getWidth() - bitmap.getHeight()) / 2;
+//                                    //Bitmap newImage = Bitmap.createBitmap(bitmap).copy(Bitmap.Config.ARGB_8888, true);
+//                                    Bitmap combined = Bitmap.createBitmap(bitmap.getWidth(),bitmap.getHeight(),Bitmap.Config.ARGB_8888);
+////                                    DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+////                                    int screenWidth = displayMetrics.widthPixels;
+////                                    int screenHeight = displayMetrics.heightPixels;
+////                                    Bitmap resizedBitmap = Bitmap.createScaledBitmap(houghBitmap, screenWidth, screenHeight, true);
+//                                    Canvas canvas = new Canvas(combined);
+//                                    canvas.drawBitmap(bitmap, 0,0,null);
+//                                    //Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
+//                                    Paint paint = new Paint();
+//                                    paint.setAlpha(200);
+//                                    //paint.setColor(Color.RED);
+//                                    canvas.drawBitmap(houghBitmap, 0,0,paint);
+//                                    bitmap.recycle();
+//                                    houghBitmap.recycle();
+                                    float rotationDegrees = image.getImageInfo().getRotationDegrees();
+                                    Bitmap rotatedBitmap = rotateBitmap(houghBitmap, rotationDegrees);
+                                    imageView.setImageBitmap(rotatedBitmap);
+                                    saveImage(rotatedBitmap);
+                                }else if(cannyMode.isChecked()){
+                                    Bitmap cannyBitmap = toCanny(bitmap);
+                                    float rotationDegrees = image.getImageInfo().getRotationDegrees();
+                                    Bitmap rotatedBitmap = rotateBitmap(cannyBitmap, rotationDegrees);
+                                    imageView.setImageBitmap(rotatedBitmap);
+                                    saveImage(rotatedBitmap);
+                                } else{
                                     float rotationDegrees = image.getImageInfo().getRotationDegrees(); // 회전시켜야할 각도
                                     Bitmap rotatedBitmap = rotateBitmap(bitmap, rotationDegrees);  // 그 각도만큼 회전시킴
                                     imageView.setImageBitmap(rotatedBitmap); // 이미지뷰에 비트맵을 로드해서 출력한다
                                     saveImage(rotatedBitmap); // 저장하는 함수 호출
                                 }
-
                             }
                         }
                 );
@@ -913,7 +948,6 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                 .setResolutionSelector(selectorBuilder.build())
                 .build();
         imageAnalysis.setAnalyzer(getMainExecutor(), this);
-
 //        if (grayButton.isChecked()) {
 //            ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
 //            selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
@@ -1048,7 +1082,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         houghOut = new byte[width * height * 4];
         houghOutBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         drawHough(in, houghOut, width, height);
-        Log.e("TEST","Hough Bitmap size: width = " + width + "height = " + height);
+        //Log.e("TEST","Hough Bitmap size: width = " + width + "height = " + height);
         ByteBuffer buffer = ByteBuffer.wrap(houghOut);
         houghOutBitmap.copyPixelsFromBuffer(buffer);
         return houghOutBitmap;
@@ -1073,7 +1107,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
         int width = bitmap.getWidth(); //비트맵 가로
         int height = bitmap.getHeight(); //세로 사이즈
-        Log.e("TEST","Gray Bitmap size: width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
+        //Log.e("TEST","Gray Bitmap size: width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
         out = new byte[width * height * 4]; // 비트맵 사이즈에 r,g,b,a 들어가니 곱하기 4
         outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
 //        if(out == null)
@@ -1090,7 +1124,6 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //        }
         //Log.e("TEST","width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
         ConvertRGBtoGray_withoutCV(in, out, width, height); // in 바이트어레이 넘겨서 out에 받는다
-
 //        int quarter = out.length / 4;
 //        ByteBuffer buffer = ByteBuffer.wrap(out,0,quarter);
         ByteBuffer buffer = ByteBuffer.wrap(out); // out 바이트 어레이를 감싸는 버퍼 만들고
