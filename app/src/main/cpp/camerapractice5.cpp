@@ -43,17 +43,20 @@ Java_com_example_camerapractice5_MainActivity_ConvertRGBtoGray_1withoutCV(JNIEnv
     //cvtColor(t,matOut,COLOR_GRAY2BGR); ->회색에서 컬러로 바뀌어도 BGRA 값에는 회색만 담길거니깐
     //다시 matOut에 집어넣어보았지만 그러면 matOut.data로 나오는 주소값이 바뀌어버린다
     //LOGE("t %d %d %d\n", t.rows, t.cols, t.channels());
-
+    cvtColor(t,matOut,COLOR_GRAY2BGRA);
     //Mat alpha(h, w, CV_8UC1, Scalar(255));
-
-    vector<Mat> chan_dst; //채널 도착지점. 벡터는 행렬, 여기서 < >안에 넣을 데이터타입을 선언
-    split(matOut, chan_dst); //4채널을 가진 matOut을 split해서 각각의 한채널을 chan_dst 배열에 담는다
-
-    for(int i=0; i<3; i++)
-        t.copyTo(chan_dst[i]); // 순서대로 chan_dst에 0,1,2에 t의 B,G,R 값을 넣는다
-    chan_dst[3].setTo(255); // BGRA에서 0123, 3은 A인데 이 값은 디폴트로 255를 준다 (A: 투명도)
-
-    merge(chan_dst, matOut); // 다시 하나의 채널로 합치기 위해 값이 담긴 배열인 chan_dst의 결과를 matOut에 담는다
+    LOGE("matIn  %d x %d x %d, buf_ptr1 %p matIn.data %p\n", matIn.rows, matIn.cols, matIn.channels(), buf_ptr1, matIn.data);
+    LOGE("matOut %d x %d x %d, buf_ptr2 %p matOut.data %p\n", matOut.rows, matOut.cols, matOut.channels(), buf_ptr2, matOut.data);
+    LOGE("t  %d x %d x %d, t.data %p\n", t.rows, t.cols, t.channels(), t.data);
+    
+//    vector<Mat> chan_dst; //채널 도착지점. 벡터는 행렬, 여기서 < >안에 넣을 데이터타입을 선언
+//    split(matOut, chan_dst); //4채널을 가진 matOut을 split해서 각각의 한채널을 chan_dst 배열에 담는다
+//
+//    for(int i=0; i<3; i++)
+//        t.copyTo(chan_dst[i]); // 순서대로 chan_dst에 0,1,2에 t의 B,G,R 값을 넣는다
+//    chan_dst[3].setTo(255); // BGRA에서 0123, 3은 A인데 이 값은 디폴트로 255를 준다 (A: 투명도)
+//
+//    merge(chan_dst, matOut); // 다시 하나의 채널로 합치기 위해 값이 담긴 배열인 chan_dst의 결과를 matOut에 담는다
 
     //LOGE("matOut 3 %d %d %d %p\n", matOut.rows, matOut.cols, matOut.channels(), matOut.data);
 //    LOGE("matIn  %d x %d x %d, buf_ptr1 %p matIn.data %p\n", matIn.rows, matIn.cols, matIn.channels(), buf_ptr1, matIn.data);
@@ -143,22 +146,23 @@ Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thi
     //HoughLinesP
     vector<Vec4i>linesP; // 4i = 4개의 integer(endpoints 4개)를 넣을 벡터타입 선언
     //linesP애 선둘을 저장할거임 (배열)
-    HoughLinesP(img_canny, linesP, 1, CV_PI/180, 200, 50,5);
+    HoughLinesP(img_canny, linesP, 1, CV_PI/180, 150, 150,10);
     //minLineLength = 검출할 직선의 최소 길이 (단위는 픽셀)
     //max_line_gap = 검출할 선 위의 점들 사이의 죄대 거리 (점 사이의 거리가 이 값보다 크면 다른 선으로 간주)
 
     for (size_t i = 0; i < linesP.size(); i++) //모든 검출된 선들 순환
     {
         Vec4i l = linesP[i]; //지금 있는 선들이 저장되어있는 linesP의 i번째를 l에 저장
-        line(matOut, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(255, 0, 0), 2); //matOut에 시작점 pt1부터 끝점 pt2까지 그림
+        line(matOut, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(255, 0, 0), 2);
+        //matOut에 시작점 pt1부터 끝점 pt2까지 그림
         //Point(l[0], l[1]) = 시작점 , Point(l[2], l[3]) = 끝점 = line 함수가 이 둘을 이어줌
         //Scalar(255,0,0) = RGB로, 선은 빨간색으로 지정 / 2 = 선 굵기
     }
 
     //HoughLines
-    //std::vector<Vec2f> lines; // 허프 변환으로 검출된 직선을 저장할 어레이 (벡터 자료형으로, 2f는 데이터가 float형 2개)
+    //vector<Vec2f> lines; // 허프 변환으로 검출된 직선을 저장할 어레이 (벡터 자료형으로, 2f는 데이터가 float형 2개)
     //2개 데이터는 각각 [rho, theta]
-    //HoughLines(img_canny, lines, 1, CV_PI / 180, 300, 0, 0); //HoughLines 함수 이용해서 img_canny로부터 직선 검출하고 lines 배열에 저장.
+    //HoughLines(img_canny, lines, 1, CV_PI / 180, 300); //HoughLines 함수 이용해서 img_canny로부터 직선 검출하고 lines 배열에 저장.
     //rho = 변환된 그래프에서 선에서 원점까지의 거리 (계산할 픽셀 해상도) 1 사용하면 됨. 원점(0,0)은 맨위 왼쪽
     //theta = 계산할 각도의 해상도. 모든 방향에서 직선을 검출할거면 PI/180사용하면 됨
     //직선 검출 반응이 민감해서 thereshold 높였음
@@ -174,13 +178,13 @@ Java_com_example_camerapractice5_MainActivity_drawHough(JNIEnv *env, jobject thi
 //        double x0 = a * rho; // cosθ * rho
 //        double y0 = b * rho; // sinθ * rho
 //
-//        pt1.x = cvRound(x0 + 1000 * (-b)); // 시작점의 x좌표. 곱하는 선으로 선분 길이를 조정함.
-//        x0: a *rho로, 검출된 선의 x좌표
+//        pt1.x = cvRound(x0 - 2000 * (b)); // 시작점의 x좌표. 곱하는 선으로 선분 길이를 조정함.
+//        //x0: a *rho로, 검출된 선의 x좌표
 //        // 1000보다 작으면 더 짧은 선이, 크면 더 긴 선이 그려질거임
-//        pt1.y = cvRound(y0 + 1000 * (a)); //cvRound: 가까운 짝수 integer로
-//        pt2.x = cvRound(x0 - 1000 * (-b)); // 끝점의 y좌표
-//        pt2.y = cvRound(y0 - 1000 * (a));
-//        line(matOut, pt1, pt2, Scalar(255, 0, 0), 3, LINE_AA); // 선 그리기
+//        pt1.y = cvRound(y0 + 2000 * (a)); //cvRound: 가까운 짝수 integer로
+//        pt2.x = cvRound(x0 + 2000 * (b)); // 끝점의 y좌표
+//        pt2.y = cvRound(y0 - 2000 * (a));
+//        line(matOut, pt1, pt2, Scalar(255, 0, 0), 2, LINE_4); // 선 그리기
 //    }
 
     env->ReleaseByteArrayElements(in, buf_ptr1, 0);
@@ -211,10 +215,11 @@ Java_com_example_camerapractice5_MainActivity_drawCanny(JNIEnv *env, jobject thi
 
     //vector<Vec4i>linesP;
     Mat edges;// 결과를 넣을 mat
-    Canny(src, edges, 50, 150, 3); //검출된 에지는 edges에 들어감
+    Canny(src, edges, 50, 150); //검출된 에지는 edges에 들어감
     //apertureSize 3 = Sobel 커넬 사이즈 3 X 3
     //작은 사이즈: 검출 센서가 민감해서 얇은 선도 검출해내 더 선들을 검출하지만 잘못된 선까지 검출할 수 있음
     //큰 사이즈: 안정되어 확실한 선만 검출
+
     cvtColor(edges, matOut, COLOR_GRAY2BGRA);
 
 //    for (size_t i = 0; i < linesP.size(); i++) //모든 검출된 선들 순환
