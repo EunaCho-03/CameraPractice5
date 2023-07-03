@@ -263,6 +263,9 @@ byte[] byteArray = byteBuffer.array();
     }
 
     public static Bitmap rotateBitmap(Bitmap bitmap, float degree){
+        if(degree == 0){
+            return bitmap;
+        }
         try{
             Matrix matrix = new Matrix();
             matrix.postRotate(degree);

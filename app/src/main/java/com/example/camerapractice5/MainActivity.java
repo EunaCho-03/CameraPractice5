@@ -7,6 +7,7 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -86,6 +87,10 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.videoio.VideoWriter;
 
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
@@ -105,12 +110,15 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     public native void ConvertRGBtoGray_withoutCV(byte[] in, byte[] out, int w, int h);
     public native void drawHough(byte[]in, byte[]houghOut, int width, int height);
     public native void drawCanny(byte[]in, byte[]cannyOut, int width, int height);
+    public native void detectFace(byte[]in, byte[]face, int width, int height, String filepath);
     byte[]out = null;
     byte[]houghOut = null;
     Bitmap outBitmap = null;
     Bitmap houghOutBitmap = null;
     byte[]cannyOut = null;
     Bitmap cannyOutBitmap = null;
+    byte[] face = null;
+    Bitmap faceBitmap = null;
 
     static {
         System.loadLibrary("opencv_java4");
@@ -125,7 +133,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     MediaActionSound sound = new MediaActionSound(); // 여러 소리를 냄
     VideoCapture<Recorder> videoCapture = null; //카메라가 비디오프레임을 구성하게함
     Button record, picture, flipCamera, flash; // 만든 버튼들
-    RadioButton colorMode, grayMode, houghMode, cannyMode;
+    RadioButton colorMode, grayMode, houghMode, cannyMode, faceDetection;
     RadioGroup radioGroup;
     boolean flashOn = false;
     boolean isGrayMode = false;
@@ -153,6 +161,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     //double first_interval_Y = 0; // Y 터치 간격
     double first_distance = 0;
     double initial_distance;
+    int a;
     float initial_zoom;
     double first_X = 0;
     double first_Y = 0;
@@ -203,6 +212,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         colorMode = findViewById(R.id.colorMode);
         cannyMode = findViewById(R.id.cannyMode);
         radioGroup = findViewById(R.id.radio_group);
+        faceDetection = findViewById(R.id.faceDetection);
 
         zoombar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -232,6 +242,8 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                     case R.id.houghMode:
 
                     case R.id.cannyMode:
+
+                    case R.id.faceDetection:
                         overPreview.setVisibility(View.VISIBLE);
                         processCameraProvider.unbindAll();
                         bind();
@@ -931,6 +943,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //        }
 //    }
 
+
     void bind() {
         CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build(); // 카메라 방향 지정
         Preview preview = new Preview.Builder().build(); // 프리뷰 만들기
@@ -968,15 +981,6 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         // 선택한 카메라와 사용사례를 카메라 수명주기(카메라를 여는 시점, 캡쳐 세션을 생성할 시점, 중지 및 종료 시점) 연결. 수명주기전환에 맞춰 카메라 상태가 적절히 변경될 수 있음
     }
 
-    void bindColor() {
-        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
-        Preview preview = new Preview.Builder().build();
-        preview.setSurfaceProvider(previewView.getSurfaceProvider());
-        imageCapture = new ImageCapture.Builder().build();
-        Recorder recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build();
-        videoCapture = VideoCapture.withOutput(recorder);
-        camera = processCameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, videoCapture);
-    }
 
 //    void bindVideo() {
 //        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
@@ -1024,12 +1028,12 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
     @Override
     public void analyze(@NonNull ImageProxy image) {
+        Bitmap bitmap = image.toBitmap();
+        Log.e("TEST","Bitmap height = " + bitmap.getHeight() + " width = " + bitmap.getWidth() + " rotation = "+image.getImageInfo().getRotationDegrees());
+        image.close();
+        rotation = image.getImageInfo().getRotationDegrees();
         if(grayMode.isChecked()){
-            Bitmap bitmap = image.toBitmap();
-            //Log.e("TEST","Bitmap height = " + bitmap.getHeight() + "width = " + bitmap.getWidth());
-            image.close();
             Bitmap gray = toGray(bitmap);
-            rotation = image.getImageInfo().getRotationDegrees();
             Bitmap rotated = rotateBitmap(gray, rotation);
             DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
             int screenWidth = displayMetrics.widthPixels;
@@ -1045,22 +1049,77 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
             BitmapFactory.Options options = new BitmapFactory.Options();
             overPreview.setImageBitmap(rotated);
         } else if(houghMode.isChecked()){
-            Bitmap bitmap = image.toBitmap();
-            image.close();
             Bitmap houghBitmap = toHough(bitmap);
-            rotation = image.getImageInfo().getRotationDegrees();
             Bitmap rotated = rotateBitmap(houghBitmap, rotation);
             overPreview.setImageBitmap(rotated);
         }else if(cannyMode.isChecked()){
-            Bitmap bitmap = image.toBitmap();
-            image.close();
             Bitmap cannyBitmap = toCanny(bitmap);
-            rotation = image.getImageInfo().getRotationDegrees();
             Bitmap rotated = rotateBitmap(cannyBitmap, rotation);
             overPreview.setImageBitmap(rotated);
-        } else{
+        }else if(faceDetection.isChecked()){
+
+            if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                Bitmap faceBitmap = faceDetect(bitmap);
+                Bitmap rotated = rotateBitmap(faceBitmap, rotation);
+                overPreview.setImageBitmap(faceBitmap);
+            }else if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
+                Bitmap faceBitmap = faceDetect(bitmap);
+                //Bitmap rotated = rotateBitmap(faceBitmap, rotation);
+                overPreview.setImageBitmap(faceBitmap);
+            }
+
+//            Bitmap faceBitmap = faceDetect(bitmap);
+//            rotation = image.getImageInfo().getRotationDegrees();
+//            Bitmap rotated = rotateBitmap(faceBitmap, rotation);
+//            overPreview.setImageBitmap(faceBitmap);
+        }else{
             overPreview.setVisibility(View.INVISIBLE);
         }
+    }
+
+    private String copyXmlToPrivateStorage(String filepath) {
+        File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
+        File cascadeFile = new File(cascadeDir, filepath);
+
+        if (cascadeFile.exists()) {
+            return cascadeFile.getAbsolutePath();
+        }
+
+        try {
+            AssetManager assetManager = getAssets();
+            InputStream inputStream = assetManager.open(filepath);
+            FileOutputStream outputStream = new FileOutputStream(cascadeFile);
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            inputStream.close();
+            outputStream.close();
+            return cascadeFile.getAbsolutePath();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private Bitmap faceDetect(Bitmap bitmap){
+        Bitmap rotated = rotateBitmap(bitmap, rotation);
+        byte[]in = bitmapToByteArray(rotated);
+        int width = rotated.getWidth();
+        int height = rotated.getHeight();
+        Log.e("TEST", "Main width: " + width + "height: " + height);
+
+        face = new byte[width * height * 4];
+        faceBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+
+        String cascadeFileName = "haarcascade_frontalface_default.xml";
+        String copiedPath = copyXmlToPrivateStorage(cascadeFileName);
+
+        detectFace(in, face, width, height, copiedPath);
+        ByteBuffer buffer = ByteBuffer.wrap(face);
+        faceBitmap.copyPixelsFromBuffer(buffer);
+        return faceBitmap;
     }
 
     private Bitmap toCanny(Bitmap bitmap){
@@ -1089,22 +1148,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     }
 
     private Bitmap toGray(Bitmap bitmap){
-//        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-//        bitmap.compress(Bitmap.CompressFormat.PNG,100,stream);
-//        byte[]in = stream.toByteArray();
-        //ByteArrayInputStream in = new ByteArrayInputStream(byteArray);
         byte[]in = bitmapToByteArray(bitmap); //비트맵을 바이트어레이로 변환(네이티브로 넘기기 위해)
-        //Log.e("TEST","bitmap height = " + bitmap.getHeight());
-        //Log.e("TEST","bitmap width = " + bitmap.getWidth());
-        //Log.e("TEST","bitmap size = " + (bitmap.getHeight() * bitmap.getWidth()));
-
-        //Log.e("TEST","byte[]in length = " + in.length);
-//        int length = in.length;
-//        for(int i = 0; i < length; i++){
-//            out[i] = in[i];
-//        }
-        //out = [in.length/3];
-
         int width = bitmap.getWidth(); //비트맵 가로
         int height = bitmap.getHeight(); //세로 사이즈
         //Log.e("TEST","Gray Bitmap size: width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
