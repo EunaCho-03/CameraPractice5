@@ -436,48 +436,27 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                                 @SuppressLint({"UnsafeExperimentalUsageError", "UnsafeOptInUsageError"}) // UnsafeExperimentalUsageError와 UnsafeOptInUsageError 검사 항목을 건너 뛰어라
                                 Image mediaImage = image.getImage(); // mediaImage = 캡쳐된 이미지
                                 Bitmap bitmap = ImageUtil.mediaImageToBitmap(mediaImage); //만들어둔 ImageUtil의 이미지를 비트맵으로 변환시키는 메소드를 씀
+                                rotation = image.getImageInfo().getRotationDegrees();
+                                Bitmap rotated = rotateBitmap(bitmap, rotation);
+                                byte[]in = bitmapToByteArray(rotated);
+                                int width = rotated.getWidth();
+                                int height = rotated.getHeight();
 
                                 if(grayMode.isChecked()){
-                                    Bitmap grayBitmap =toGray(bitmap);
-                                    float rotationDegrees = image.getImageInfo().getRotationDegrees();
-                                    Bitmap rotatedBitmap = rotateBitmap(grayBitmap, rotationDegrees);
-                                    imageView.setImageBitmap(rotatedBitmap);
-                                    saveImage(rotatedBitmap);
+                                    Bitmap grayBitmap =toGray(in, width, height);
+                                    imageView.setImageBitmap(grayBitmap);
+                                    saveImage(grayBitmap);
                                 }else if(houghMode.isChecked()){
-                                    Bitmap houghBitmap = toHough(bitmap);
-//                                    //BitmapDrawable drawable = (BitmapDrawable)overPreview.getDrawable();
-//                                    //Bitmap houghBit = drawable.getBitmap();
-//                                    //float move = (bitmap.getWidth() - bitmap.getHeight()) / 2;
-//                                    //Bitmap newImage = Bitmap.createBitmap(bitmap).copy(Bitmap.Config.ARGB_8888, true);
-//                                    Bitmap combined = Bitmap.createBitmap(bitmap.getWidth(),bitmap.getHeight(),Bitmap.Config.ARGB_8888);
-////                                    DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
-////                                    int screenWidth = displayMetrics.widthPixels;
-////                                    int screenHeight = displayMetrics.heightPixels;
-////                                    Bitmap resizedBitmap = Bitmap.createScaledBitmap(houghBitmap, screenWidth, screenHeight, true);
-//                                    Canvas canvas = new Canvas(combined);
-//                                    canvas.drawBitmap(bitmap, 0,0,null);
-//                                    //Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
-//                                    Paint paint = new Paint();
-//                                    paint.setAlpha(200);
-//                                    //paint.setColor(Color.RED);
-//                                    canvas.drawBitmap(houghBitmap, 0,0,paint);
-//                                    bitmap.recycle();
-//                                    houghBitmap.recycle();
-                                    float rotationDegrees = image.getImageInfo().getRotationDegrees();
-                                    Bitmap rotatedBitmap = rotateBitmap(houghBitmap, rotationDegrees);
-                                    imageView.setImageBitmap(rotatedBitmap);
-                                    saveImage(rotatedBitmap);
+                                    Bitmap houghBitmap = toHough(in, width, height);
+                                    imageView.setImageBitmap(houghBitmap);
+                                    saveImage(houghBitmap);
                                 }else if(cannyMode.isChecked()){
-                                    Bitmap cannyBitmap = toCanny(bitmap);
-                                    float rotationDegrees = image.getImageInfo().getRotationDegrees();
-                                    Bitmap rotatedBitmap = rotateBitmap(cannyBitmap, rotationDegrees);
-                                    imageView.setImageBitmap(rotatedBitmap);
-                                    saveImage(rotatedBitmap);
+                                    Bitmap cannyBitmap = toCanny(in, width, height);
+                                    imageView.setImageBitmap(cannyBitmap);
+                                    saveImage(cannyBitmap);
                                 } else{
-                                    float rotationDegrees = image.getImageInfo().getRotationDegrees(); // 회전시켜야할 각도
-                                    Bitmap rotatedBitmap = rotateBitmap(bitmap, rotationDegrees);  // 그 각도만큼 회전시킴
-                                    imageView.setImageBitmap(rotatedBitmap); // 이미지뷰에 비트맵을 로드해서 출력한다
-                                    saveImage(rotatedBitmap); // 저장하는 함수 호출
+                                    imageView.setImageBitmap(rotated); // 이미지뷰에 비트맵을 로드해서 출력한다
+                                    saveImage(rotated); // 저장하는 함수 호출
                                 }
                             }
                         }
@@ -494,35 +473,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                     //} else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                     //    activityResultLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
                 } else {
-//                    if(grayButton.isChecked()){
-//                        if (isGrayRecording) {
-//                            isGrayRecording = false;
-//                            if (videoWriter != null) {
-//                                Log.e("TEST","VideoWriter not null");
-//                                videoWriter.release();
-//                                Log.e("TEST","Gray Video Recording ended");
-//;                                videoWriter = null;
-//
-//                                chronometer.setBase(SystemClock.elapsedRealtime());
-//                                chronometer.stop();
-//                                chronometer.setVisibility(View.INVISIBLE);
-//                                running = false;
-//                            }
-//                        } else {
-//                            if (!running) {
-//                                chronometer.setVisibility(View.VISIBLE);
-//                                chronometer.setBase(SystemClock.elapsedRealtime());
-//                                chronometer.start();
-//                                running = true;
-//                            }
-//                            isGrayRecording = true;
-//                            Log.e("TEST","VideoWriter null");
-//                            MainActivity.this.captureGrayVideo();
-//                        }
-//                    }
-//                    else{
                     MainActivity.this.captureVideo(); // 모든 권한이 있다면 녹화하는 함수 호출
-                    //}
                 }
             }
         });
@@ -981,97 +932,43 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         // 선택한 카메라와 사용사례를 카메라 수명주기(카메라를 여는 시점, 캡쳐 세션을 생성할 시점, 중지 및 종료 시점) 연결. 수명주기전환에 맞춰 카메라 상태가 적절히 변경될 수 있음
     }
 
-
-//    void bindVideo() {
-//        CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(cameraFacing).build();
-////        Preview preview = new Preview.Builder().build();
-////        preview.setSurfaceProvider(previewView.getSurfaceProvider());
-////        imageCapture = new ImageCapture.Builder().build();
-//        Recorder recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build();
-//        videoCapture = VideoCapture.withOutput(recorder);
-//
-////            ResolutionSelector.Builder selectorBuilder = new ResolutionSelector.Builder();
-////            selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY);
-//            imageAnalysis = new ImageAnalysis.Builder()
-//                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-//                    //.setResolutionSelector(selectorBuilder.build())
-//                    .build();
-//            imageAnalysis.setAnalyzer(getMainExecutor(), new ImageAnalysis.Analyzer() {
-//                @Override
-//                public void analyze(@NonNull ImageProxy image) {
-//                    Log.e("TEST","Analyze Video");
-//                    Bitmap bitmap = image.toBitmap();
-//                    image.close();
-//                    Log.e("TEST","Bitmap width = " + bitmap.getWidth() + "bitmap height = " + bitmap.getHeight());
-//                    Bitmap grayFrame = toGray(bitmap);
-//                    //processFrame(grayFrame);
-//                    //saveGrayscaleFrame(grayFrame);
-//                    double frameWidth = image.getWidth();
-//                    double frameHeight = image.getHeight();
-//                    rotation = image.getImageInfo().getRotationDegrees();
-//                    if(isGrayRecording) {
-//                        try {
-//                            saveGrayVideo(grayFrame, rotation, frameWidth, frameHeight);
-//                        } catch (IllegalAccessException e) {
-//                            throw new RuntimeException(e);
-//                        } catch (NoSuchFieldException e) {
-//                            throw new RuntimeException(e);
-//                        }
-//                    }
-//                    //byte[]grayByteArray2 = bitmapToByteArray(rotated);
-//                    //videoWriter.write(new MatOfByte(grayByteArray2));
-//                }
-//            });
-//            camera = processCameraProvider.bindToLifecycle(this, cameraSelector, videoCapture, imageAnalysis);
-//    }
-
-
     @Override
     public void analyze(@NonNull ImageProxy image) {
         Bitmap bitmap = image.toBitmap();
-        Log.e("TEST","Bitmap height = " + bitmap.getHeight() + " width = " + bitmap.getWidth() + " rotation = "+image.getImageInfo().getRotationDegrees());
+        //Log.e("TEST","Bitmap height = " + bitmap.getHeight() + " width = " + bitmap.getWidth() + " rotation = "+image.getImageInfo().getRotationDegrees());
         image.close();
         rotation = image.getImageInfo().getRotationDegrees();
-        if(grayMode.isChecked()){
-            Bitmap gray = toGray(bitmap);
-            Bitmap rotated = rotateBitmap(gray, rotation);
-            DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
-            int screenWidth = displayMetrics.widthPixels;
-            int screenHeight = displayMetrics.heightPixels;
-            Log.e("TEST","Gray screen size: width = " + overPreview.getWidth() + "height = " + overPreview.getHeight());
-            float scaleX = (float) screenWidth / rotated.getWidth();
-            float scaleY = (float) screenHeight / rotated.getHeight();
-            float scale = Math.min(scaleX, scaleY);
+        Log.e("TEST","Rotation degrees: " + rotation);
+        Bitmap rotated = rotateBitmap(bitmap, rotation);
+        byte[] in = null;
+        int width, height;
+
+        if (cameraFacing == CameraSelector.LENS_FACING_FRONT) {
             Matrix matrix = new Matrix();
-            matrix.setScale(scale, scale);
-            Bitmap resizedBitmap = Bitmap.createScaledBitmap(rotated, screenWidth, screenHeight, true);
-            Log.e("TEST","Resized bitmap size: width = " + resizedBitmap.getWidth() + "height = " + resizedBitmap.getHeight());
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            overPreview.setImageBitmap(rotated);
+            matrix.setScale(-1, 1);
+            Bitmap flippedBitmap = Bitmap.createBitmap(rotated, 0, 0, rotated.getWidth(), rotated.getHeight(), matrix, true);
+            rotated.recycle();
+            in = bitmapToByteArray(flippedBitmap);
+            width = flippedBitmap.getWidth();
+            height = flippedBitmap.getHeight();
+        }else{
+            in = bitmapToByteArray(rotated);
+            width = rotated.getWidth();
+            height = rotated.getHeight();
+        }
+
+        if(grayMode.isChecked()){
+            Bitmap gray = toGray(in, width, height);
+            overPreview.setImageBitmap(gray);
         } else if(houghMode.isChecked()){
-            Bitmap houghBitmap = toHough(bitmap);
-            Bitmap rotated = rotateBitmap(houghBitmap, rotation);
-            overPreview.setImageBitmap(rotated);
+            Bitmap houghBitmap = toHough(in, width, height);
+            overPreview.setImageBitmap(houghBitmap);
         }else if(cannyMode.isChecked()){
-            Bitmap cannyBitmap = toCanny(bitmap);
-            Bitmap rotated = rotateBitmap(cannyBitmap, rotation);
-            overPreview.setImageBitmap(rotated);
+            Bitmap cannyBitmap = toCanny(in, width, height);
+            overPreview.setImageBitmap(cannyBitmap);
         }else if(faceDetection.isChecked()){
-
-            if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                Bitmap faceBitmap = faceDetect(bitmap);
-                Bitmap rotated = rotateBitmap(faceBitmap, rotation);
-                overPreview.setImageBitmap(faceBitmap);
-            }else if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
-                Bitmap faceBitmap = faceDetect(bitmap);
-                //Bitmap rotated = rotateBitmap(faceBitmap, rotation);
-                overPreview.setImageBitmap(faceBitmap);
-            }
-
-//            Bitmap faceBitmap = faceDetect(bitmap);
-//            rotation = image.getImageInfo().getRotationDegrees();
-//            Bitmap rotated = rotateBitmap(faceBitmap, rotation);
-//            overPreview.setImageBitmap(faceBitmap);
+            Bitmap faceBitmap = faceDetect(in, width, height);
+            overPreview.setImageBitmap(faceBitmap);
         }else{
             overPreview.setVisibility(View.INVISIBLE);
         }
@@ -1103,16 +1000,9 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         }
     }
 
-    private Bitmap faceDetect(Bitmap bitmap){
-        Bitmap rotated = rotateBitmap(bitmap, rotation);
-        byte[]in = bitmapToByteArray(rotated);
-        int width = rotated.getWidth();
-        int height = rotated.getHeight();
-        Log.e("TEST", "Main width: " + width + "height: " + height);
-
+    private Bitmap faceDetect(byte[] in, int width, int height){
         face = new byte[width * height * 4];
         faceBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-
         String cascadeFileName = "haarcascade_frontalface_default.xml";
         String copiedPath = copyXmlToPrivateStorage(cascadeFileName);
 
@@ -1122,10 +1012,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         return faceBitmap;
     }
 
-    private Bitmap toCanny(Bitmap bitmap){
-        byte[]in = bitmapToByteArray(bitmap);
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
+    private Bitmap toCanny(byte[] in, int width, int height){
         cannyOut = new byte[width * height * 4];
         cannyOutBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         drawCanny(in, cannyOut, width, height);
@@ -1134,10 +1021,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         return cannyOutBitmap;
     }
 
-    private Bitmap toHough(Bitmap bitmap){
-        byte[]in = bitmapToByteArray(bitmap);
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
+    private Bitmap toHough(byte[] in, int width, int height){
         houghOut = new byte[width * height * 4];
         houghOutBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         drawHough(in, houghOut, width, height);
@@ -1147,11 +1031,7 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         return houghOutBitmap;
     }
 
-    private Bitmap toGray(Bitmap bitmap){
-        byte[]in = bitmapToByteArray(bitmap); //비트맵을 바이트어레이로 변환(네이티브로 넘기기 위해)
-        int width = bitmap.getWidth(); //비트맵 가로
-        int height = bitmap.getHeight(); //세로 사이즈
-        //Log.e("TEST","Gray Bitmap size: width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
+    private Bitmap toGray(byte[] in, int width, int height){
         out = new byte[width * height * 4]; // 비트맵 사이즈에 r,g,b,a 들어가니 곱하기 4
         outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
 //        if(out == null)
@@ -1168,8 +1048,6 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 //        }
         //Log.e("TEST","width = " + bitmap.getWidth() + "height = " + bitmap.getHeight());
         ConvertRGBtoGray_withoutCV(in, out, width, height); // in 바이트어레이 넘겨서 out에 받는다
-//        int quarter = out.length / 4;
-//        ByteBuffer buffer = ByteBuffer.wrap(out,0,quarter);
         ByteBuffer buffer = ByteBuffer.wrap(out); // out 바이트 어레이를 감싸는 버퍼 만들고
         outBitmap.copyPixelsFromBuffer(buffer); // outBitmap에 복사
         //Bitmap CopiedBitmap = outBitmap.copy(outBitmap.getConfig(),true);

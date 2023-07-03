@@ -238,56 +238,39 @@ Java_com_example_camerapractice5_MainActivity_detectFace(JNIEnv *env, jobject th
         filePath = nullptr;
     else
         filePath = env->GetStringUTFChars(cascadeFilePath, nullptr);
-    LOGE("filePath %s\n", filePath);
-    LOGE("Native width1: %d, height: %d", width, height);
-
+    //LOGE("filePath %s\n", filePath);
+    //LOGE("Native width1: %d, height: %d", width, height);
 
     Mat src(height, width, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr1));
     Mat matOut(height, width, CV_8UC4, reinterpret_cast<unsigned char*>(buf_ptr2));
 
-    //src.copyTo(matOut);
+    double scale = 3.5;
 
     Mat img_small; //해상도를 그대로 유지한채 찾으려고하면 프리뷰 속도가 너무 느려져서 사이즈를 작게 줄여 해상도 낮게 만들기
     //resize(src, img_small,Size(480,640));
-    resize(src, img_small, Size(width/3, height/3));
+    resize(src, img_small, Size(width/scale, height/scale));
     //LOGE("Img_small width = %d , height = %d", img_small.cols , img_small.rows);
 
     Mat img_gray;
     cvtColor(img_small, img_gray, COLOR_BGRA2GRAY);
-    LOGE("img gray x: %d, y: %d", img_gray.cols, img_gray.rows);
-
-    //LOGE("jni 1\n");
+    //LOGE("img gray x: %d, y: %d", img_gray.cols, img_gray.rows);
 
     CascadeClassifier face_cascade;
 
     //chrono::system_clock::time_point start = chrono::system_clock::now();
     face_cascade.load(filePath);
-    //face_cascade.load("data/haarcascades/haarcascade_frontalface_default.xml");
-    //face_cascade.load("C:/Users/QR22003/Downloads/opencv-4.4.0-android-sdk/OpenCV-android-sdk/sdk/etc/haarcascades/haarcascade_frontalface_default.xml");
-    //face_cascade.load("C:/Users/QR22003/AndroidStudioProjects/CameraPractice5/OpenCV/etc/haarcascades/haarcascade_frontalface_default.xml");
 //    chrono::system_clock::time_point end = chrono::system_clock::now();
 //    long duration = chrono::duration_cast<chrono::milliseconds>(end-start).count();
 //    LOGE("face_cascade.load = %ld", duration);
 
-    //LOGE("jni 2\n");
-
-    if(face_cascade.empty()){
-        //face_cascade.load(filePath);
-    }
-
-
-
-    else {
         //start = chrono::system_clock::now();
         vector<Rect> faces;
         face_cascade.detectMultiScale(img_gray,faces,1.1,3); //얼굴찾기
         //end = chrono::system_clock::now();
         //duration = chrono::duration_cast<chrono::milliseconds>(end-start).count();
         //LOGE("face_cascade.detectMultiScale = %ld", duration);
-        LOGE("jni 2.1 faces %d\n", faces.size());
-
-        double scale = 3;
-        LOGE("Native width2: %d, height: %d", width, height);
+        //LOGE("jni 2.1 faces %d\n", faces.size());
+        //LOGE("Native width2: %d, height: %d", width, height);
 
         for (int i = 0; i < faces.size(); i++) {
             Rect scaledRect(
@@ -297,22 +280,9 @@ Java_com_example_camerapractice5_MainActivity_detectFace(JNIEnv *env, jobject th
                         faces[i].height * scale
                 );
             rectangle(matOut, scaledRect.tl(), scaledRect.br(), Scalar(0, 255, 0), 3);
-
-            LOGE("x coordinate: %d, y: %d", (faces[i].tl().x * scale), faces[i].tl().y * scale);
-            LOGE("face width: %d, height: %d", faces[i].width, faces[i].height);
-            LOGE("scaledRect width: %f, height: %f", faces[i].width * scale, faces[i].height * scale);
-
-            //LOGE("Draw Rectangle");
-            //rectangle(matOut, scaledRect.tl(), scaledRect.br(), Scalar(0, 255, 0), 3);
-            //LOGE("top left x: %d, y: %d", scaledRect.tl().x, scaledRect.tl().y);
-            //LOGE("bottom right x: %d, y: %d", scaledRect.br().x, scaledRect.br().y);
         }
-
-        //LOGE("jni 2.3\n");
-    }
 
     env->ReleaseByteArrayElements(in, buf_ptr1, 0);
     env->ReleaseByteArrayElements(face, buf_ptr2, 0);
     env->ReleaseStringUTFChars(cascadeFilePath, filePath);
-    //LOGE("jni 3\n");
 }
